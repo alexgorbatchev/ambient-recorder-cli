@@ -1,0 +1,14 @@
+/bin/
+/.tmp/
+/.workspaces/
+/.codegraph/
+/.cache/
+/.dist/
+/dist/
+/.pi-subagents/
+*.test
+*.out
+*.prof
+*.sqlite-wal
+*.sqlite-shm
+.DS_Store
