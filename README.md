@@ -34,7 +34,20 @@
 
 # Installation
 
-This checkout has no published release. Its local executable is `bin/ambient-recorder`; [contributor instructions](docs/internal/contributing.md) describe building it. Published downloads and signing are not configured.
+Download the prebuilt binary for your Mac from [GitHub Releases](https://github.com/alexgorbatchev/ambient-recorder-cli/releases). Use `arm64` for Apple Silicon or `amd64` for Intel. Each archive includes the executable, configuration example, embedded usage reference and component licenses.
+
+For Apple Silicon, download version 1.0.0, verify its checksum and put the executable on your PATH:
+
+```sh
+curl --fail --location --remote-name https://github.com/alexgorbatchev/ambient-recorder-cli/releases/download/v1.0.0/ambient-recorder_1.0.0_darwin_arm64.tar.gz
+curl --fail --location --remote-name https://github.com/alexgorbatchev/ambient-recorder-cli/releases/download/v1.0.0/checksums.txt
+awk '$2 == "ambient-recorder_1.0.0_darwin_arm64.tar.gz"' checksums.txt | shasum -a 256 -c -
+tar -xzf ambient-recorder_1.0.0_darwin_arm64.tar.gz
+mkdir -p "$HOME/.local/bin"
+install -m 755 ambient-recorder "$HOME/.local/bin/ambient-recorder"
+```
+
+Replace `arm64` with `amd64` in the download, checksum filter and extraction commands for Intel. Preserve the accompanying notices and license texts when redistributing. Add `$HOME/.local/bin` to PATH if it is not already there. Executables are ad-hoc signed and are not Developer ID signed or notarized.
 
 # Setup
 
@@ -44,21 +57,25 @@ This checkout has no published release. Its local executable is `bin/ambient-rec
 # Quick Start
 
 ```sh
-./bin/ambient-recorder microphone list
-./bin/ambient-recorder config init
-./bin/ambient-recorder recording start --output "$HOME/Recordings/ambient"
+ambient-recorder microphone list
+ambient-recorder config init
+ambient-recorder recording start --output "$HOME/Recordings/ambient"
 ```
 
-Sample daily log output from a verified recording:
+Sample output from `microphone list` on a verified Mac; available devices vary:
 
-```json
-{"time":"2026-09-30T12:19:21.953704-07:00","level":"INFO","msg":"Capture device opened","microphone_id":126,"sample_rate":16000}
+```text
+"MacBook Pro Microphone"
+  Connection: Built-in
+  Input type: Unavailable
+  Manufacturer: Apple Inc.
+  Preference: "uid:BuiltInMicrophoneDevice"
 ```
 
 ```sh
-./bin/ambient-recorder --help
-./bin/ambient-recorder --version
-./bin/ambient-recorder microphone list
+ambient-recorder --help
+ambient-recorder --version
+AGENT=1 ambient-recorder skill
 ```
 
 # Options & Flags
@@ -84,13 +101,19 @@ Sample daily log output from a verified recording:
 | :--- | :--- | :--- | :--- |
 | `--output <path>` | | XDG user data `/ambient-recorder` | Output directory written into the service configuration |
 
+`ambient-recorder completion bash|fish|powershell|zsh`
+
+| Flag | Short | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--no-descriptions` | | `false` | Generate shell completions without descriptions |
+
 # Configuration
 
 `config init` creates a file with owner-only permissions and refuses to overwrite it. To create and use a file in another location:
 
 ```sh
-./bin/ambient-recorder --config "$HOME/recorder.toml" config init
-./bin/ambient-recorder --config "$HOME/recorder.toml" recording start
+ambient-recorder --config "$HOME/recorder.toml" config init
+ambient-recorder --config "$HOME/recorder.toml" recording start
 ```
 
 Edit the generated TOML file to set preferences:
@@ -118,7 +141,7 @@ When a TOML file is loaded, the generated agent includes its absolute path so mi
 
 ```sh
 mkdir -p "$HOME/Recordings/ambient" "$HOME/Library/LaunchAgents"
-./bin/ambient-recorder service print --output "$HOME/Recordings/ambient" > "$HOME/Library/LaunchAgents/com.alexgorbatchev.ambient-recorder.plist"
+ambient-recorder service print --output "$HOME/Recordings/ambient" > "$HOME/Library/LaunchAgents/com.alexgorbatchev.ambient-recorder.plist"
 plutil -lint "$HOME/Library/LaunchAgents/com.alexgorbatchev.ambient-recorder.plist"
 launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.alexgorbatchev.ambient-recorder.plist"
 ```

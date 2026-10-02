@@ -18,4 +18,4 @@ The executable includes the following components. Preserve this file and the lin
 
 Additional libopusenc source notices cover its [Ogg packer](docs/licenses/opusenc-ogg-packer.txt), [header](docs/licenses/opusenc-header.txt), [picture](docs/licenses/opusenc-picture.txt), and [Unicode support](docs/licenses/opusenc-unicode.txt).
 
-Go dependency rationale is recorded in [the dependency proposal](research_notes/Continuous%20microphone%20Opus%20recording/cli.md). The current module versions and checksums are declared in [go.mod](go.mod) and [go.sum](go.sum). libopusenc 0.3 is listed by its publisher as a development release.
+The current module versions and checksums are declared in [go.mod](go.mod) and [go.sum](go.sum). libopusenc 0.3 is listed by its publisher as a development release.

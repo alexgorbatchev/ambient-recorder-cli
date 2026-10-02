@@ -1,0 +1,39 @@
+name: Release Binaries
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ github.ref_name }}
+
+  publish:
+    needs: verify
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: verified-*
+          path: dist
+          merge-multiple: true
+      - name: Publish verified native archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          test -f "dist/ambient-recorder_${version}_darwin_arm64.tar.gz"
+          test -f "dist/ambient-recorder_${version}_darwin_amd64.tar.gz"
+          (cd dist; shasum -a 256 *.tar.gz > checksums.txt; shasum -a 256 -c checksums.txt)
+          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/checksums.txt --verify-tag --title "$version" --notes-file .github/release-notes.md

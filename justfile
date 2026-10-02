@@ -1,5 +1,8 @@
 set dotenv-load := false
 
+version := env("RECORDER_VERSION", "dev")
+link_flags := "-X main.version=" + version + " -extldflags=-Wl,-sectcreate,__TEXT,__info_plist," + justfile_directory() + "/internal/capture/Info.plist"
+
 default:
     @just --list
 
@@ -8,7 +11,7 @@ native:
 
 build: native
     mkdir -p bin
-    go build -ldflags='-extldflags=-Wl,-sectcreate,__TEXT,__info_plist,{{justfile_directory()}}/internal/capture/Info.plist' -o bin/ambient-recorder ./cmd/ambient-recorder
+    go build -trimpath -ldflags={{quote(link_flags)}} -o bin/ambient-recorder ./cmd/ambient-recorder
 
 run *args: build
     bin/ambient-recorder {{args}}
@@ -28,3 +31,8 @@ lint: vet
     test -z "$(gofmt -l cmd internal)"
 
 check: lint test build
+
+# Build, verify, and package the native architecture. Set RECORDER_VERSION=X.Y.Z.
+release: check
+    codesign --force --sign - bin/ambient-recorder
+    sh scripts/package-release.sh

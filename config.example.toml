@@ -5,11 +5,11 @@
 # Dotted keys such as output.dir are also valid TOML at the document root.
 #
 # Use this example directly:
-#   ./bin/ambient-recorder recording start --config ./config.example.toml
+#   ambient-recorder recording start --config ./config.example.toml
 # List microphone names, stable UIDs, and connection details:
-#   ./bin/ambient-recorder microphone list
+#   ambient-recorder microphone list
 # Generate a default user configuration without overwriting an existing file:
-#   ./bin/ambient-recorder config init
+#   ambient-recorder config init
 #
 # Configuration discovery:
 #   $XDG_CONFIG_HOME/ambient-recorder/config.toml, when XDG_CONFIG_HOME is set;
@@ -29,7 +29,8 @@
 # output.dir: nonempty string naming the recording directory.
 # Default: $XDG_DATA_HOME/ambient-recorder, or
 #          ~/.local/share/ambient-recorder when XDG_DATA_HOME is unset.
-# This example intentionally uses a relative directory. Relative paths resolve
+# This example inherits the default directory by leaving dir commented out.
+# To select a relative directory, uncomment dir below. Relative paths resolve
 # against the process working directory, not the configuration file's directory.
 # For background recording, use an absolute path appropriate for your machine.
 # Literal '~' and environment variables inside TOML strings are not expanded.
@@ -48,7 +49,7 @@
 #
 # service print pins this directory in its generated launchd --output argument.
 # After changing output for an installed service, regenerate and reload its plist.
-dir = "~/.local/share/ambient-recorder"
+# dir = "recordings"
 
 # output.bitrate: integer target Opus bitrate in bits per second.
 # Default: 32000 (32 kbit/s). Accepted range: 6000 through 128000, inclusive.

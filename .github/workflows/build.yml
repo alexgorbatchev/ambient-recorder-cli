@@ -1,0 +1,55 @@
+name: Native verification
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: macOS ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: amd64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+      RECORDER_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Install approved task runner
+        run: sh scripts/install-ci-just.sh
+      - name: Check, build, verify and package
+        run: |
+          mkdir -p .tmp
+          export RECORDER_VERSION="${RECORDER_VERSION#v}"
+          just release 2>&1 | tee .tmp/release-check.log
+      - uses: actions/upload-artifact@v7
+        with:
+          name: verified-${{ matrix.arch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: diagnostics-${{ matrix.arch }}
+          path: .tmp/release-check.log
+          if-no-files-found: warn
