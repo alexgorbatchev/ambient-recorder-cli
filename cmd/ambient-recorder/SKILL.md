@@ -1,10 +1,10 @@
 ---
 name: ambient-recorder
-description: Use when operating ambient-recorder to record audio, configure microphone preferences, inspect inputs, or generate a background recording configuration.
+description: Use when operating ambient-recorder to record audio, configure microphone preferences, inspect inputs, or manage its background service.
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-01 22:02
-  last_modified: 2026-10-01 22:52
+  last_modified: 2026-10-02 15:04
   status: current
 ---
 
@@ -33,6 +33,12 @@ Inspect the listed names and stable `uid:<UID>` selectors, then edit the created
 | `ambient-recorder recording start` | `none` | Continuously capture microphone plus computer playback into a mono Ogg Opus stream and append diagnostics. Request capture permissions; create directories/files and hold an exclusive output-directory lock. |
 | `ambient-recorder service` | `none` | Print service command help. |
 | `ambient-recorder service print` | `none` | Print a launchd plist to stdout. Resolve the executable, loaded config, and output to absolute paths. Installation and process startup are separate shell operations. |
+| `ambient-recorder service install` | `none` | Create the user's LaunchAgent plist with owner-only permissions, enable startup at login and request recording immediately. Create default TOML if absent. Refuse an existing plist; retain it on launch failure for retry with service start. |
+| `ambient-recorder service start` | `none` | Enable startup at login and request recording. Load the saved plist if needed; an already loaded service is started without killing its current recording process. Require installation. |
+| `ambient-recorder service stop` | `none` | Disable startup at future logins, then unload the job if loaded. Removing the job sends SIGTERM for recording finalization. Retain the plist, TOML, and recordings. |
+| `ambient-recorder service restart` | `none` | Unload the job for shutdown, then enable and load the saved plist. Read TOML again on process startup. Require installation. |
+| `ambient-recorder service status` | `none` | Print installed and loaded booleans and the plist path. Optionally include verbatim native diagnostics. Inspect service registration without opening capture. |
+| `ambient-recorder service uninstall` | `none` | Disable startup, unload the job if loaded, and remove the saved plist. Retain TOML, recordings and diagnostics; an already absent plist is accepted. |
 | `ambient-recorder skill` | `none` | Print this complete embedded Markdown, including frontmatter, byte-for-byte to stdout in both modes; work offline and without repository files. Return write failures as errors. |
 | `ambient-recorder help` | `[command]` | Print help for a command path, such as `help recording start`. |
 | `ambient-recorder completion` | `none` | Print shell-completion command help. |
@@ -49,7 +55,7 @@ Use `--help` on any command for help. Domain leaf commands and `skill` accept ze
 
 | Scope | Flag | Short | Type | Parser default | Accepted values and effective behavior |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `all` | `--config` | `none` | `string` | `""` | TOML path; empty selects the XDG default below. An explicitly named file must exist for recording and service generation; config init creates it. Ignored by microphone, help, skill, and completion operations. |
+| `all` | `--config` | `none` | `string` | `""` | TOML path; empty selects the XDG default below. An explicitly named file must exist for recording, service print, and service install; config init creates it. Other service operations use the saved plist. Ignored by microphone, help, skill, and completion operations. |
 | `all` | `--help` | `-h` | `bool` | `false` | Print help and exit. |
 | `ambient-recorder` | `--version` | `-v` | `bool` | `false` | Print only the raw version plus a newline and exit. Development builds print dev; releases embed their version. |
 | `ambient-recorder recording start` | `--output` | `none` | `string` | `""` | Nonempty recording directory; empty parser default inherits output.dir from TOML or the default data directory. |
@@ -57,6 +63,8 @@ Use `--help` on any command for help. Domain leaf commands and `skill` accept ze
 | `ambient-recorder recording start` | `--complexity` | `none` | `int` | `2` | Opus computational effort, 0..10 inclusive; higher uses more encoder CPU. |
 | `ambient-recorder recording start` | `--sync-interval` | `none` | `duration` | `5s` | Positive Go duration such as 500ms, 5s, or 1m30s. Approximate interval for synchronizing audio and logs to disk. |
 | `ambient-recorder service print` | `--output` | `none` | `string` | `""` | Resolve the configured/default output directory and pin it in the generated agent. |
+| `ambient-recorder service install` | `--output` | `none` | `string` | `""` | Resolve the configured/default recording directory and pin it in the installed agent. A CLI override leaves the TOML value intact. |
+| `ambient-recorder service status` | `--details` | `none` | `bool` | `false` | Append native launchctl diagnostics verbatim when the service is loaded. |
 | `ambient-recorder completion bash` | `--no-descriptions` | `none` | `bool` | `false` | Generate completion choices without descriptions. |
 | `ambient-recorder completion fish` | `--no-descriptions` | `none` | `bool` | `false` | Generate completion choices without descriptions. |
 | `ambient-recorder completion powershell` | `--no-descriptions` | `none` | `bool` | `false` | Generate completion choices without descriptions. |
@@ -71,9 +79,10 @@ Use `--help` on any command for help. Domain leaf commands and `skill` accept ze
 - `HOME`: determines the user's home directory when XDG overrides are absent.
 - `NO_COLOR`: any nonempty value disables human recording-log colors.
 - `TERM`: dumb disables human recording-log colors. Redirected stderr is plain text.
-- Help, version, config init, microphone list, skill, completion, and service print return results on stdout. Recording has no normal stdout output. Usage and failures go to stderr.
+- Help, version, config init, microphone list, skill, completion, and service commands return results on stdout. Recording has no normal stdout output. Usage and failures go to stderr.
 - Human microphone listings show names, default status, connection/type and available manufacturer/model details, plus stable preference selectors. Connection/type labels use identifiers available in the build SDK; unrecognized types display Unavailable. Agent listings use one flat key/value line per microphone. With no inputs, both print `No microphones available`.
 - Config init prints `Configuration created: <absolute path>` in human mode or `config=<absolute path>` in agent mode.
+- Service actions print a human result and `Service file: <path>`, or `service=<action> plist=<quoted path>` in agent mode. Service status prints `Installed: <bool>`, `Loaded by macOS: <bool>`, and `Service file: <path>` in human mode; agent mode prints `installed=<bool> loaded=<bool> plist=<quoted path>`. Loaded status describes registration with macOS; inspect capture logs to establish recording health. The optional native report is displayed verbatim in both modes.
 - Recording emits INFO/WARN/ERROR events on stderr. Human events include timestamp, UTC offset, INF/WRN/ERR, microphone/connection, recording paths, and useful errors. Agent events are newline-delimited JSON with full device and encoder metadata. Startup inventory and DEBUG progress remain in daily JSON diagnostics; agent stderr also includes startup inventory.
 - Argument, configuration, fatal startup and cleanup errors exit 1; normal completion/cancellation exits 0. Retryable capture failures, including missing capture permissions, are logged and retried while recording remains running. A 90-second operation watchdog exits 2 for supervisor recovery. Main errors begin with `[ERROR]` in human mode or `ERR:` in agent mode. Failed console logging is best effort; failed daily logging adds log_error to stderr.
 
@@ -102,13 +111,17 @@ Recordings are mono 48 kHz Ogg Opus, mixing microphone and computer playback. Fi
 
 Pages are emitted during recording, approximately every 100 ms. Audio/log synchronization defaults to five seconds; segment close also synchronizes. A crash can lose buffered audio or an incomplete page; the interrupted stream lacks final trimming. Capture/storage faults retry, and dropped frames/storage errors are logged. Storage recovery can duplicate pending samples. Permissions, sleep, full disks, blocked storage, and process downtime prevent continuous capture. Check daily logs for gaps inside a file as well as segment filenames.
 
-Print a background agent after placing the executable at its permanent path:
+Place the executable at its permanent path and grant capture permissions in a foreground recording before installing background recording:
 
 ```sh
-mkdir -p "$HOME/Recordings/ambient" "$HOME/Library/LaunchAgents"
-ambient-recorder service print --output "$HOME/Recordings/ambient" > "$HOME/Library/LaunchAgents/com.alexgorbatchev.ambient-recorder.plist"
-plutil -lint "$HOME/Library/LaunchAgents/com.alexgorbatchev.ambient-recorder.plist"
-launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.alexgorbatchev.ambient-recorder.plist"
+ambient-recorder service install
+ambient-recorder service status --details
+ambient-recorder service restart
+ambient-recorder service stop
+ambient-recorder service start
+ambient-recorder service uninstall
 ```
 
-The agent uses KeepAlive with a five-second throttle and writes fallback stderr to supervisor.stderr.log in the output directory. It includes the loaded absolute config path; regenerate/reload it when changing the output directory or config path. Verify capture permissions separately under launchd. Stop background recording with `launchctl bootout "gui/$(id -u)/com.alexgorbatchev.ambient-recorder"`; remove its saved plist to prevent next-login startup. Use one recorder per output directory.
+Run service commands as the logged-in user, without sudo. Install saves `~/Library/LaunchAgents/com.alexgorbatchev.ambient-recorder.plist`, referencing the executable's resolved absolute path. It creates a default TOML if absent and includes its absolute path. The recording directory is pinned as an absolute --output argument, matching supervisor diagnostics. Reinstall with `service uninstall` then `service install` after moving the binary or changing the recording directory or configuration file path. Changing other TOML settings requires `service restart`.
+
+The Aqua-session agent starts at GUI login after each reboot, and uses KeepAlive with a five-second restart throttle. It stops at logout and cannot capture during sleep or before login. macOS Background Items settings and capture permissions can prevent startup or capture. Verify permissions separately under launchd and inspect `YYYY/MM/DD/log.nljson` plus `supervisor.stderr.log` in the installed output directory. New plist and configuration files use 0600; new directories use 0700, and the agent uses umask 077. Service controls call the built-in /bin/launchctl; Apple's Foundation serializes the plist in the executable. `service print` remains read-only. Stop a foreground recorder before installing or starting a service against the same directory; only one recorder can acquire its recording lock.

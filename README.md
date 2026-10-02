@@ -6,7 +6,7 @@
 - **Microphone preferences:** Selects from an ordered TOML list and switches automatically when a preferred input becomes available.
 - **Hourly files:** Writes `YYYY/MM/DD/HH-MM-SS.000000000.opus` using the segment's start time with nine fractional-second digits.
 - **Diagnostics:** Appends events to `YYYY/MM/DD/log.nljson`, including capture changes, dropped frames, storage errors, and segment boundaries.
-- **Restart supervision:** Prints a macOS launchd configuration for background operation.
+- **Background service:** Starts recording at login and requests a restart after exit.
 
 # How It Works
 
@@ -16,6 +16,7 @@
 - Check the capture log event for the selected microphone, connection type, playback source, and absolute output directory. Use `microphone list` to inspect hardware details.
 - Leave the process running. New files begin at local hour boundaries; existing recordings remain intact.
 - Press Ctrl-C to finish the current file and stop a foreground recording.
+- Use `service install` to enable background recording at each login after reboot; use `service stop` to stop it and disable startup.
 
 # How it Really Works
 
@@ -101,6 +102,18 @@ AGENT=1 ambient-recorder skill
 | :--- | :--- | :--- | :--- |
 | `--output <path>` | | XDG user data `/ambient-recorder` | Output directory written into the service configuration |
 
+`ambient-recorder service install`
+
+| Flag | Short | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--output <path>` | | Configured output directory | Recording directory saved in the background service |
+
+`ambient-recorder service status`
+
+| Flag | Short | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--details` | | `false` | Include the native macOS service diagnostic report |
+
 `ambient-recorder completion bash|fish|powershell|zsh`
 
 | Flag | Short | Default | Description |
@@ -135,26 +148,32 @@ Use `[input]` and `[output]` tables, or dotted keys such as `output.dir = "recor
 
 # Background Recording
 
-The `service print` command prints a configuration without installing or starting it. It references the executable's current absolute path, so place the binary at its permanent location before generating the configuration. Run it in the foreground first to grant permissions.
+Place the executable at its permanent location, such as `~/.local/bin/ambient-recorder`. Run recording in the foreground to grant permissions, then stop it before installing the background service. Run service commands as your logged-in user, without sudo.
 
-When a TOML file is loaded, the generated agent includes its absolute path so microphone preferences and encoding settings are read on each process start. The output directory is pinned as an absolute `--output` argument for recording and supervisor diagnostics. Regenerate and reload the agent after changing the desired output directory or configuration file path.
-
-```sh
-mkdir -p "$HOME/Recordings/ambient" "$HOME/Library/LaunchAgents"
-ambient-recorder service print --output "$HOME/Recordings/ambient" > "$HOME/Library/LaunchAgents/com.alexgorbatchev.ambient-recorder.plist"
-plutil -lint "$HOME/Library/LaunchAgents/com.alexgorbatchev.ambient-recorder.plist"
-launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.alexgorbatchev.ambient-recorder.plist"
-```
-
-The per-user agent starts recording and uses `KeepAlive` to request relaunch after exit, with a five-second throttle. It runs in the login session; it does not capture while the Mac sleeps. Background permissions must be checked separately from foreground permissions. Fallback stderr goes to `supervisor.stderr.log` in the recording directory. [Apple documents launchd agent supervision](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html).
-
-Stop background recording before running another recorder against the same directory:
+`service install` creates `~/Library/LaunchAgents/com.alexgorbatchev.ambient-recorder.plist`, enables startup at login, and requests recording immediately. It creates the default TOML if missing and uses your current configuration. An existing service file is retained; uninstall before reinstalling it.
 
 ```sh
-launchctl bootout "gui/$(id -u)/com.alexgorbatchev.ambient-recorder"
+ambient-recorder service install
+ambient-recorder service status
+ambient-recorder service status --details
 ```
 
-Remove the saved plist to prevent launch at the next login.
+The service starts when you log in after reboot. It requests a restart after exit with a five-second throttle, and stops at logout. Recording requires an active login session and cannot continue during sleep or before login. macOS Background Items settings or capture permissions can prevent startup or recording. Check permissions separately for background operation. [Apple documents startup and agent supervision](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html).
+
+Status reports whether a service file exists and whether macOS has loaded the job. A loaded job can still be retrying capture; check the daily `log.nljson` and `supervisor.stderr.log` in the recording directory to confirm audio capture.
+
+The service includes the absolute TOML path, so microphone preferences and encoding settings are read on each process start. Run `service restart` after editing them. The binary path and recording directory are pinned when installing, and changing either or selecting another config file requires uninstalling and reinstalling the service. `--output` on install overrides the directory without editing TOML.
+
+Stop background recording before running another recorder against the same directory. Stopping also disables startup at future logins; starting enables it again:
+
+```sh
+ambient-recorder service restart
+ambient-recorder service stop
+ambient-recorder service start
+ambient-recorder service uninstall
+```
+
+Uninstalling stops the job and removes its service file, retaining configuration, recordings and diagnostics. `service print` prints a configuration to stdout without installing or starting it.
 
 # License
 

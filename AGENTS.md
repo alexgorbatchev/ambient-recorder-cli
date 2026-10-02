@@ -44,6 +44,8 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
   `*` name patterns apply before ordering. Log input connection/disconnection.
 - Capture gaps and process downtime remain possible. Do not claim gapless capture
   or crash durability from a successful build or a finalized sample alone.
+- Background service startup is at GUI login after reboot, as approved by the
+  user. Keep native supervision and distinguish a loaded job from working audio.
 
 ## Verification and boundaries
 
@@ -54,6 +56,9 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
 - Keep hardware capture opt-in. Never install/start a persistent service as part
   of a build or test. Keep recordings local; transcription and calendar features
   are future work.
+- Native service tests use unique transient launchd jobs and retained `.tmp`
+  plists, without audio capture or installation in `~/Library/LaunchAgents`.
+  Never use the production service label in lifecycle tests.
 - Ask first before adding any external dependency. Approved CI dependencies are
   checkout v7, setup-go v7, upload-artifact v7, download-artifact v8, and just
   1.58.0. No extra runtime dependencies are authorized by release work.

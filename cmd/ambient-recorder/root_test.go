@@ -42,7 +42,7 @@ func TestServiceConfiguration(t *testing.T) {
 	if result, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("invalid launchd plist: %v\n%s\n%s", err, result, out)
 	}
-	if !strings.Contains(out, "audio &amp; notes") || !strings.Contains(out, "<true></true>") || !strings.Contains(out, "recording") || !strings.Contains(out, "start") {
+	if !strings.Contains(out, "audio &amp; notes") || !strings.Contains(out, "<true/>") || !strings.Contains(out, "recording") || !strings.Contains(out, "start") {
 		t.Fatalf("incomplete launchd configuration: %s", out)
 	}
 }

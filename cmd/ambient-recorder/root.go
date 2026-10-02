@@ -23,9 +23,7 @@ func newRootCommand() (*cobra.Command, error) {
 	group := &cobra.Command{Use: "recording", Short: "Capture microphone and computer playback"}
 	group.AddCommand(newStartCommand(&configPath))
 	root.AddCommand(group)
-	service := &cobra.Command{Use: "service", Short: "Configure recording in the background"}
-	service.AddCommand(newServicePrintCommand(&configPath))
-	root.AddCommand(service)
+	root.AddCommand(newServiceCommand(&configPath, userLaunchAgent))
 	microphone := &cobra.Command{Use: "microphone", Short: "Inspect microphone inputs"}
 	microphone.AddCommand(newMicrophoneListCommand())
 	root.AddCommand(microphone)
