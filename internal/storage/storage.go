@@ -5,11 +5,8 @@ package storage
 import (
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +19,7 @@ const (
 	dayLayout     = "2006/01/02"
 	logName       = "log.nljson"
 	opusSuffix    = ".opus"
+	segmentLayout = "15-04-05.000000000"
 )
 
 // Store owns a directory handle. Callers own and must close returned files.
@@ -46,22 +44,18 @@ func Open(path string) (*Store, error) {
 	return &Store{root: r}, nil
 }
 
-// CreateSegment reserves the next HH-NNN.opus path without overwriting existing
-// entries. The timestamp's location determines the calendar directory and hour.
+// CreateSegment reserves a nanosecond timestamp path without overwriting existing
+// entries. The timestamp's location determines the calendar directory. If that
+// exact path is occupied, the reservation uses the current clock in that location.
 // The returned empty file must receive Ogg Opus headers and encoded pages before
 // it is playable. Reservation alone does not create a valid recording.
 func (s *Store) CreateSegment(at time.Time) (*os.File, error) {
-	dir, err := s.day(at)
-	if err != nil {
-		return nil, err
-	}
-	prefix := at.Format("15") + "-"
-	n, err := s.nextSequence(dir, prefix)
-	if err != nil {
-		return nil, err
-	}
 	for {
-		path := filepath.Join(dir, fmt.Sprintf("%s%03d%s", prefix, n, opusSuffix))
+		dir, err := s.day(at)
+		if err != nil {
+			return nil, err
+		}
+		path := filepath.Join(dir, at.Format(segmentLayout)+opusSuffix)
 		f, err := s.root.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, fileMode)
 		if err == nil {
 			return f, nil
@@ -69,10 +63,7 @@ func (s *Store) CreateSegment(at time.Time) (*os.File, error) {
 		if !errors.Is(err, os.ErrExist) {
 			return nil, fmt.Errorf("reserve recording %s: %w", path, err)
 		}
-		if n == math.MaxInt {
-			return nil, errors.New("recording sequence exhausted")
-		}
-		n++
+		at = time.Now().In(at.Location())
 	}
 }
 
@@ -116,34 +107,4 @@ func (s *Store) day(at time.Time) (string, error) {
 		return "", fmt.Errorf("create daily recording directory: %w", err)
 	}
 	return dir, nil
-}
-
-func (s *Store) nextSequence(dir, prefix string) (int, error) {
-	f, err := s.root.Open(dir)
-	if err != nil {
-		return 0, fmt.Errorf("open recording directory for allocation: %w", err)
-	}
-	entries, readErr := f.ReadDir(-1)
-	if err := errors.Join(readErr, f.Close()); err != nil {
-		return 0, fmt.Errorf("read existing recordings: %w", err)
-	}
-	next := 0
-	for _, entry := range entries {
-		name, ok := strings.CutPrefix(entry.Name(), prefix)
-		if !ok {
-			continue
-		}
-		name, ok = strings.CutSuffix(name, opusSuffix)
-		if !ok || len(name) < 3 || strings.IndexFunc(name, func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
-			continue
-		}
-		n, err := strconv.Atoi(name)
-		if err != nil || n == math.MaxInt {
-			return 0, fmt.Errorf("recording sequence exceeds supported range: %s", entry.Name())
-		}
-		if n >= next {
-			next = n + 1
-		}
-	}
-	return next, nil
 }

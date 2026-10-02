@@ -16,6 +16,7 @@ import (
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/capture"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/storage"
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/testdir"
 )
 
 func TestStartupAnnouncement(t *testing.T) {
@@ -91,7 +92,7 @@ func TestWatchdog(t *testing.T) {
 }
 
 func TestAcquisitionHourRotation(t *testing.T) {
-	root := t.TempDir()
+	root := testdir.New(t)
 	s, err := storage.Open(root)
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +114,7 @@ func TestAcquisitionHourRotation(t *testing.T) {
 	if err := j.close(); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"2026/09/30/23-000.opus", "2026/10/01/00-000.opus"} {
+	for _, path := range []string{"2026/09/30/23-59-59.990000000.opus", "2026/10/01/00-00-00.000000000.opus"} {
 		b, err := os.ReadFile(filepath.Join(root, path))
 		if err != nil {
 			t.Fatal(err)
@@ -125,7 +126,7 @@ func TestAcquisitionHourRotation(t *testing.T) {
 }
 
 func TestDailyJournal(t *testing.T) {
-	root := t.TempDir()
+	root := testdir.New(t)
 	s, err := storage.Open(root)
 	if err != nil {
 		t.Fatal(err)
@@ -169,7 +170,7 @@ func TestDailyJournal(t *testing.T) {
 }
 
 func TestJournalIncompleteTail(t *testing.T) {
-	root := t.TempDir()
+	root := testdir.New(t)
 	s, err := storage.Open(root)
 	if err != nil {
 		t.Fatal(err)

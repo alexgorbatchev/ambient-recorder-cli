@@ -10,18 +10,21 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/testdir"
 )
 
 func TestSegmentRestart(t *testing.T) {
-	root := t.TempDir()
+	root := testdir.New(t)
 	at := time.Date(2026, time.September, 30, 9, 58, 0, 0, time.UTC)
 	for i := range 3 {
 		s := openStore(t, root)
-		f, err := s.CreateSegment(at)
+		start := at.Add(time.Duration(i) * time.Second)
+		f, err := s.CreateSegment(start)
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := filepath.Join(root, "2026/09/30", fmt.Sprintf("09-%03d.opus", i))
+		want := filepath.Join(root, "2026/09/30", start.Format("15-04-05.000000000")+".opus")
 		if f.Name() != want {
 			t.Fatalf("path = %q, want %q", f.Name(), want)
 		}
@@ -33,7 +36,7 @@ func TestSegmentRestart(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	b, err := os.ReadFile(filepath.Join(root, "2026/09/30/09-000.opus"))
+	b, err := os.ReadFile(filepath.Join(root, "2026/09/30/09-58-00.000000000.opus"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,14 +46,14 @@ func TestSegmentRestart(t *testing.T) {
 }
 
 func TestSegmentCalendarBoundaries(t *testing.T) {
-	s := openStore(t, t.TempDir())
+	s := openStore(t, testdir.New(t))
 	tests := []struct {
 		at   time.Time
 		path string
 	}{
-		{time.Date(2026, 9, 30, 23, 59, 0, 0, time.UTC), "2026/09/30/23-000.opus"},
-		{time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), "2026/10/01/00-000.opus"},
-		{time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC), "2026/10/01/01-000.opus"},
+		{time.Date(2026, 9, 30, 23, 59, 0, 123456789, time.UTC), "2026/09/30/23-59-00.123456789.opus"},
+		{time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), "2026/10/01/00-00-00.000000000.opus"},
+		{time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC), "2026/10/01/01-00-00.000000000.opus"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
@@ -68,18 +71,17 @@ func TestSegmentCalendarBoundaries(t *testing.T) {
 
 func TestSegmentAllocation(t *testing.T) {
 	tests := []struct {
-		name     string
-		existing []string
-		want     string
+		name      string
+		existing  []string
+		collision bool
 	}{
-		{"gap", []string{"09-000.opus", "09-002.opus"}, "09-003.opus"},
-		{"beyond three digits", []string{"09-999.opus"}, "09-1000.opus"},
-		{"unrelated", []string{"10-007.opus", "09-junk.opus", "09-001.txt", "log.nljson"}, "09-000.opus"},
-		{"reserved directory", []string{"09-000.opus/"}, "09-001.opus"},
+		{"unrelated", []string{"notes.txt", "log.nljson"}, false},
+		{"reserved file", []string{"09-00-00.000000000.opus"}, true},
+		{"reserved directory", []string{"09-00-00.000000000.opus/"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			root := t.TempDir()
+			root := testdir.New(t)
 			dir := filepath.Join(root, "2026/09/30")
 			if err := os.MkdirAll(dir, 0o700); err != nil {
 				t.Fatal(err)
@@ -100,8 +102,21 @@ func TestSegmentAllocation(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer closeFile(t, f)
-			if filepath.Base(f.Name()) != tt.want {
-				t.Fatalf("allocated %q, want %q", f.Name(), tt.want)
+			initial := filepath.Join(dir, "09-00-00.000000000.opus")
+			if (f.Name() != initial) != tt.collision {
+				t.Fatalf("allocated %q, collision=%v", f.Name(), tt.collision)
+			}
+			if _, err := f.WriteString("new recording"); err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range tt.existing {
+				if strings.HasSuffix(name, "/") {
+					continue
+				}
+				b, err := os.ReadFile(filepath.Join(dir, name))
+				if err != nil || string(b) != "preserve" {
+					t.Fatalf("existing %q changed: %q, %v", name, b, err)
+				}
 			}
 		})
 	}
@@ -109,7 +124,7 @@ func TestSegmentAllocation(t *testing.T) {
 
 func TestConcurrentSegments(t *testing.T) {
 	const workers = 16
-	s := openStore(t, t.TempDir())
+	s := openStore(t, testdir.New(t))
 	paths := make(chan string, workers)
 	errs := make(chan error, workers)
 	var wg sync.WaitGroup
@@ -145,7 +160,7 @@ func TestConcurrentSegments(t *testing.T) {
 }
 
 func TestDailyLogAppend(t *testing.T) {
-	root := t.TempDir()
+	root := testdir.New(t)
 	at := time.Date(2026, 9, 30, 23, 59, 0, 0, time.UTC)
 	for _, when := range []time.Time{at, at, at.Add(time.Minute)} {
 		s := openStore(t, root)
@@ -181,7 +196,7 @@ func TestDailyLogAppend(t *testing.T) {
 }
 
 func TestStorageFailure(t *testing.T) {
-	root := t.TempDir()
+	root := testdir.New(t)
 	if err := os.WriteFile(filepath.Join(root, "2026"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +213,7 @@ func TestStorageFailure(t *testing.T) {
 }
 
 func TestStorageCannotEscapeRoot(t *testing.T) {
-	root, outside := t.TempDir(), t.TempDir()
+	root, outside := testdir.New(t), testdir.New(t)
 	if err := os.Symlink(outside, filepath.Join(root, "2026")); err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +232,7 @@ func TestStorageCannotEscapeRoot(t *testing.T) {
 }
 
 func TestSingleRecorderLock(t *testing.T) {
-	root := t.TempDir()
+	root := testdir.New(t)
 	first, second := openStore(t, root), openStore(t, root)
 	lock, err := first.Lock()
 	if err != nil {
