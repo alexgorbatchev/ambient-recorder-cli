@@ -15,6 +15,10 @@ int main(void) {
     assert(strcmp(transport_name(kAudioDeviceTransportTypeUSB), "USB") == 0);
     assert(strcmp(transport_name(kAudioDeviceTransportTypeBuiltIn), "Built-in") == 0);
     assert(strcmp(transport_name(kAudioDeviceTransportTypeDisplayPort), "DisplayPort") == 0);
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 270000
+    assert(strcmp(transport_name(kAudioDeviceTransportTypeRemoteScreen), "Screen sharing") == 0);
+    assert(strcmp(transport_name(kAudioDeviceTransportTypeRemoteStreaming), "Remote streaming") == 0);
+#endif
     assert(strcmp(transport_name(UINT32_MAX), "Unavailable") == 0);
     assert(strcmp(terminal_name(kAudioStreamTerminalTypeHeadsetMicrophone), "Headset microphone") == 0);
     assert(strcmp(terminal_name(kAudioStreamTerminalTypeMicrophone), "Microphone") == 0);

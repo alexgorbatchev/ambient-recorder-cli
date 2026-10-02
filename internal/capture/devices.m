@@ -104,8 +104,11 @@ static const char *transport_name(UInt32 type) {
         case kAudioDeviceTransportTypeThunderbolt: return "Thunderbolt";
         case kAudioDeviceTransportTypeContinuityCaptureWired: return "Continuity (wired)";
         case kAudioDeviceTransportTypeContinuityCaptureWireless: return "Continuity (wireless)";
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 270000
+        // These identifiers are declared in the macOS 27 SDK, but not 26.2.
         case kAudioDeviceTransportTypeRemoteScreen: return "Screen sharing";
         case kAudioDeviceTransportTypeRemoteStreaming: return "Remote streaming";
+#endif
         default: return "Unavailable";
     }
 }

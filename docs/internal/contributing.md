@@ -1,6 +1,6 @@
 ---
 created_on: 2026-09-30 12:30
-last_modified: 2026-10-01 22:34
+last_modified: 2026-10-01 22:52
 status: current
 ---
 
@@ -19,7 +19,7 @@ just run --help
 just run-ai recording start --help
 ```
 
-`bin/ambient-recorder` includes an embedded Info.plist with microphone and audio-capture usage descriptions. Use `just build` to preserve that metadata. Tests compile native helpers with Apple's compiler and run under the race detector; hardware capture requires explicit opt-in. Test directories are allocated under the module's `.tmp` using `internal/testdir` and remain after tests for inspection, including compiled decoder helpers. `.tmp` also stores dependencies and intermediate artifacts and is ignored by Git.
+`bin/ambient-recorder` includes an embedded Info.plist with microphone and audio-capture usage descriptions. Use `just build` to preserve that metadata and the deployment target. Tests compile native helpers with Apple's compiler and run under the race detector; hardware capture requires explicit opt-in. Test directories are allocated under the module's `.tmp` using `internal/testdir` and remain after tests for inspection, including compiled decoder helpers. The justfile sets TMPDIR to `.tmp` and uses Go's `-work` flag to retain compiler intermediates. `.tmp` also stores dependencies and intermediate artifacts and is ignored by Git.
 
 ## Runtime Design
 
@@ -49,7 +49,7 @@ GitHub Actions runs the shared native verification workflow on macOS 15 Apple Si
 RECORDER_VERSION=1.0.0 just release
 ```
 
-The recipe runs the normal checks, injects `main.version`, ad-hoc signs the executable and packages `dist/ambient-recorder_1.0.0_darwin_<arch>.tar.gz`. Verification executes both output modes, compares the embedded skill with its maintained source while running away from repository files, validates architecture and privacy metadata, and rejects non-system dynamic dependencies. The extracted archive is checked again. Staging and verification evidence remain in `.tmp`; compiled application binaries remain in `bin/`.
+The recipe runs the normal checks, injects `main.version`, ad-hoc signs the executable and packages `dist/ambient-recorder_1.0.0_darwin_<arch>.tar.gz`. Verification executes both output modes, compares the embedded skill with its maintained source while running away from repository files, validates architecture, the linked macOS 14.2 deployment target and privacy metadata, and rejects non-system dynamic dependencies. The justfile exports deployment flags for every CGO object, including runtime/cgo, and for the final link. Native dependency archives are inspected for the same target; rebuilds preserve old objects and sources under `.tmp`. The extracted archive is checked again. Staging and verification evidence remain in `.tmp`; compiled application binaries remain in `bin/`.
 
 Push an annotated release tag only after CI passes on its target commit and the release-equivalent binary reports the intended version. The tag-triggered workflow repeats native checks for both architectures and publishes only after both pass, with `checksums.txt`. Publishing requires explicit user authorization. These builds are not Developer ID signed or notarized; no signing credentials are configured.
 

@@ -37,6 +37,7 @@ jobs:
       - name: Install approved task runner
         run: sh scripts/install-ci-just.sh
       - name: Check, build, verify and package
+        shell: bash
         run: |
           mkdir -p .tmp
           export RECORDER_VERSION="${RECORDER_VERSION#v}"

@@ -74,9 +74,26 @@ func TestSkillWithoutRepository(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(binary), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	build := exec.Command("go", "build", "-o", binary, ".")
+	build := exec.Command("go", "build", "-work", "-o", binary, ".")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build standalone binary: %v\n%s", err, out)
+	}
+	loadCommands, err := exec.Command("otool", "-l", binary).CombinedOutput()
+	if err != nil {
+		t.Fatalf("inspect linked deployment target: %v\n%s", err, loadCommands)
+	}
+	minimumSeen := false
+	for _, line := range strings.Split(string(loadCommands), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[0] == "minos" {
+			minimumSeen = true
+			if fields[1] != "14.2" {
+				t.Fatalf("linked binary requires macOS %s; documented minimum is 14.2", fields[1])
+			}
+		}
+	}
+	if !minimumSeen {
+		t.Fatalf("linked binary has no minimum macOS load command: %s", loadCommands)
 	}
 	for _, mode := range []string{"0", "1"} {
 		cmd := exec.Command(binary, "skill")

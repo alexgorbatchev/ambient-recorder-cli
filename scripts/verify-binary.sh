@@ -14,6 +14,7 @@ mkdir -p .tmp
 verification=$(mktemp -d "$PWD/.tmp/binary-verification.XXXXXX")
 test -x "$binary"
 test "$(lipo -archs "$binary")" = "$expected_arch"
+sh scripts/verify-deployment.sh "$verification/load-commands" "$binary"
 codesign --verify --verbose "$binary"
 printf '%s\n' "$expected_version" > "$verification/expected-version"
 for mode in 0 1; do

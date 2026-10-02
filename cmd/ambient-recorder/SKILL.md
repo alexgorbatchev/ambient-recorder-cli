@@ -4,7 +4,7 @@ description: Use when operating ambient-recorder to record audio, configure micr
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-01 22:02
-  last_modified: 2026-10-01 22:34
+  last_modified: 2026-10-01 22:52
   status: current
 ---
 
@@ -72,7 +72,7 @@ Use `--help` on any command for help. Domain leaf commands and `skill` accept ze
 - `NO_COLOR`: any nonempty value disables human recording-log colors.
 - `TERM`: dumb disables human recording-log colors. Redirected stderr is plain text.
 - Help, version, config init, microphone list, skill, completion, and service print return results on stdout. Recording has no normal stdout output. Usage and failures go to stderr.
-- Human microphone listings show names, default status, connection/type and available manufacturer/model details, plus stable preference selectors. Agent listings use one flat key/value line per microphone. With no inputs, both print `No microphones available`.
+- Human microphone listings show names, default status, connection/type and available manufacturer/model details, plus stable preference selectors. Connection/type labels use identifiers available in the build SDK; unrecognized types display Unavailable. Agent listings use one flat key/value line per microphone. With no inputs, both print `No microphones available`.
 - Config init prints `Configuration created: <absolute path>` in human mode or `config=<absolute path>` in agent mode.
 - Recording emits INFO/WARN/ERROR events on stderr. Human events include timestamp, UTC offset, INF/WRN/ERR, microphone/connection, recording paths, and useful errors. Agent events are newline-delimited JSON with full device and encoder metadata. Startup inventory and DEBUG progress remain in daily JSON diagnostics; agent stderr also includes startup inventory.
 - Argument, configuration, fatal startup and cleanup errors exit 1; normal completion/cancellation exits 0. Retryable capture failures, including missing capture permissions, are logged and retried while recording remains running. A 90-second operation watchdog exits 2 for supervisor recovery. Main errors begin with `[ERROR]` in human mode or `ERR:` in agent mode. Failed console logging is best effort; failed daily logging adds log_error to stderr.
