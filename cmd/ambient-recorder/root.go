@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -33,6 +32,7 @@ func newRootCommand() (*cobra.Command, error) {
 	configuration := &cobra.Command{Use: "config", Short: "Manage recorder configuration"}
 	configuration.AddCommand(newConfigInitCommand(&configPath))
 	root.AddCommand(configuration)
+	root.AddCommand(newSkillCommand())
 	catalog := cobrahelptree.TechCatalog{
 		"ambient-recorder recording start": {
 			Summary: "Record continuously until interrupted",
@@ -46,8 +46,9 @@ func newRootCommand() (*cobra.Command, error) {
 			Metadata: map[string]string{"output": "mono Ogg Opus", "platform": "macOS 14.2+", "writes": "recordings and diagnostic logs"},
 		},
 	}
-	if err := cobrahelptree.SetupWithOptions(root, cobrahelptree.HelpOptions{Catalog: catalog, Tree: cobrahelptree.TreeOptions{HideGeneratedCommands: true}}); err != nil {
-		return nil, fmt.Errorf("configure help: %w", err)
+	catalog["ambient-recorder help"] = cobrahelptree.TechInfo{Args: []cobrahelptree.ArgSpec{{Name: "[command]", Description: "Command path to describe"}}}
+	if err := configureHelp(root, catalog); err != nil {
+		return nil, err
 	}
 	return root, nil
 }
