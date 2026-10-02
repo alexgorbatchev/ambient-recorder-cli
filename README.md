@@ -1,30 +1,36 @@
-`ambient-recorder` records the default microphone and computer playback into local Opus files on macOS. It keeps recording during silence and retries capture or storage failures, providing audio for later meeting transcription.
+`ambient-recorder` records microphone and computer playback into local Opus files on macOS. It keeps recording during silence and retries capture or storage failures, providing audio for later meeting transcription.
 
 # What It Does
 
 - **Continuous capture:** Mixes microphone and playback into one mono track.
-- **Hourly files:** Writes `YYYY/MM/DD/HH-000.opus`, allocating `-001`, `-002`, and later suffixes on restart or capture recovery.
+- **Microphone preferences:** Selects from an ordered TOML list and switches automatically when a preferred input becomes available.
+- **Hourly files:** Writes `YYYY/MM/DD/HH-MM-SS.000000000.opus` using the segment's start time with nine fractional-second digits.
 - **Diagnostics:** Appends events to `YYYY/MM/DD/log.nljson`, including capture changes, dropped frames, storage errors, and segment boundaries.
 - **Restart supervision:** Prints a macOS launchd configuration for background operation.
 
 # How It Works
 
+- Use `microphone list` to inspect available inputs, their connection types, and stable device identifiers.
+- Run `config init` to create settings, then edit the microphone preference list if needed. Its default is `["*"]`.
 - Start recording and grant microphone and system audio recording access when macOS requests it.
-- Check the startup message for the microphone name, sample rate, and absolute output directory.
+- Check the capture log event for the selected microphone, connection type, playback source, and absolute output directory. Use `microphone list` to inspect hardware details.
 - Leave the process running. New files begin at local hour boundaries; existing recordings remain intact.
 - Press Ctrl-C to finish the current file and stop a foreground recording.
 
 # How it Really Works
 
 - Audio stays on this Mac. There are no uploads, transcription requests, API credentials, VAD, or calendar connections.
-- The default directory is `$XDG_DATA_HOME/ambient-recorder`, falling back to `~/.local/share/ambient-recorder`. `--output` overrides it. Directories and files are created with owner-only permissions.
+- Configuration is read once at startup from `$XDG_CONFIG_HOME/ambient-recorder/config.toml`, falling back to `~/.config/ambient-recorder/config.toml`. Use `--config` to select another file. A missing default file uses built-in defaults; a missing explicitly selected file fails. Unknown keys, invalid types, and invalid final settings fail with an error. Explicit flags override file values, which override defaults. Restart recording to apply file edits.
+- The default output directory is `$XDG_DATA_HOME/ambient-recorder`, falling back to `~/.local/share/ambient-recorder`. The TOML `output.dir` value or `--output` overrides it. Relative output paths resolve from the working directory; use an absolute path for a stable destination. Directories and files are created with owner-only permissions.
 - Mono output combines both sources. It cannot provide separate microphone/playback transcripts. [Deepgram lists Ogg and Opus as supported formats](https://developers.deepgram.com/docs/supported-audio-formats); transcription is a separate future integration.
 - Silence remains in the recording. Encoding defaults to a 32,000 bit/s target and complexity 2. Actual file size varies with audio and container overhead.
-- Capture follows the default microphone. A device or format change closes the segment and attempts to reopen capture. Changes and recovery can leave gaps; overflow is counted and logged.
+- Microphone preferences match case-sensitive names, name patterns such as `LG Ultra*`, or exact `uid:<UID>` identifiers printed by `microphone list`. In names, `*` matches any sequence of characters; all other punctuation is literal. Prefix any selector with `!` to exclude matching inputs globally, regardless of list position. Exclusions override every positive preference and wildcard fallback. `*` tries the macOS default first, then other eligible inputs. Unlisted microphones remain eligible through an implicit final `*` unless excluded. A higher-priority input becoming available triggers automatic switching. Device or format changes reopen capture while keeping the current file and Opus stream open. Output remains mono at 48 kHz across different hardware sample rates. Changes and recovery can leave gaps; overflow and microphone connections/disconnections are logged.
 - Audio pages are emitted while recording, approximately every 100 ms. Storage synchronization is attempted every five seconds. A crash can lose buffered audio or an incomplete final page, and the interrupted file lacks final duration trimming. [Ogg Opus readers must handle streams without an end-of-stream page](https://www.rfc-editor.org/rfc/rfc7845.html#section-3). Power-loss durability is not guaranteed.
 - A blocked capture, disk operation, or shutdown triggers process exit after 90 seconds. A configured supervisor restarts it. Sleep, permissions, full disks, and process downtime prevent continuous capture.
 - Only one recorder may use an output directory. Recording does not prune files; free disk space remains the user's responsibility.
-- Recording prints the microphone name, device ID, sample rate, playback source, and absolute output directory to stderr whenever capture opens. Recording writes no normal output to stdout. Warnings and failures also go to stderr; debug events go to the daily JSON log. `AGENT=1` enables compact help and diagnostics. Normal cancellation exits 0, startup or cleanup failure exits 1, and the watchdog exits 2.
+- Segment names use acquisition time. If that exact path is occupied, exclusive creation retries with the current timestamp; existing files remain intact. Filenames alone cannot reveal every gap within a segment, including a microphone switch.
+- If an input opens but produces no capture frames for five seconds, the recorder skips that input for 30 seconds and immediately tries another eligible microphone. The current output file and Opus stream stay open. After the cooldown, a higher-priority microphone becomes eligible again. This detects missing capture frames; it does not treat silence as a failure.
+- Recording writes timestamped INFO, WARN, and ERROR events to stderr, including microphone connections, disconnections, selection changes, and capture startup. Human logs show the selected microphone and connection, playback source, recording paths, and useful error/retry details. The initial list of available devices, hardware IDs, manufacturer/model information, and encoder settings stay in diagnostics. Use `microphone list` to inspect available inputs. Human logs use compact single lines with the local date and time, UTC offset, and an `INF`, `WRN`, or `ERR` severity tag. Colors are enabled when stderr is a terminal; redirected output is plain text. A nonempty `NO_COLOR` or `TERM=dumb` disables colors. `AGENT=1` uses newline-delimited JSON without colors and retains all diagnostic fields and startup inventory events. The daily JSON log also retains every event, including DEBUG progress and full device metadata. Device details are reported by the hardware: an input can report a generic microphone type even when it belongs to a headset or display. If writing the daily log fails, the event goes to stderr with `log_error`. Recording writes no normal output to stdout. Normal cancellation exits 0, startup or cleanup failure exits 1, and the watchdog exits 2.
 
 # Installation
 
@@ -38,6 +44,8 @@ This checkout has no published release. Its local executable is `bin/ambient-rec
 # Quick Start
 
 ```sh
+./bin/ambient-recorder microphone list
+./bin/ambient-recorder config init
 ./bin/ambient-recorder recording start --output "$HOME/Recordings/ambient"
 ```
 
@@ -50,12 +58,14 @@ Sample daily log output from a verified recording:
 ```sh
 ./bin/ambient-recorder --help
 ./bin/ambient-recorder --version
+./bin/ambient-recorder microphone list
 ```
 
 # Options & Flags
 
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
+| `--config <path>` | | XDG configuration `/ambient-recorder/config.toml` | TOML configuration file |
 | `--help` | `-h` | `false` | Print help |
 | `--version` | `-v` | `false` | Print version and exit |
 
@@ -74,9 +84,37 @@ Sample daily log output from a verified recording:
 | :--- | :--- | :--- | :--- |
 | `--output <path>` | | XDG user data `/ambient-recorder` | Output directory written into the service configuration |
 
+# Configuration
+
+`config init` creates a file with owner-only permissions and refuses to overwrite it. To create and use a file in another location:
+
+```sh
+./bin/ambient-recorder --config "$HOME/recorder.toml" config init
+./bin/ambient-recorder --config "$HOME/recorder.toml" recording start
+```
+
+Edit the generated TOML file to set preferences:
+
+```toml
+[input]
+microphones = ["LG Ultra*", "!Virtual*", "*"]
+
+[output]
+dir = "recordings"
+bitrate = 32000
+complexity = 2
+sync_interval = "5s"
+```
+
+This example writes beneath the working directory, prefers names starting with `LG Ultra`, and excludes names starting with `Virtual`. Set `output.dir` to your own absolute path for a stable destination and choose device names or patterns from `microphone list`. Stable UIDs also work: `input.microphones = ["uid:BuiltInMicrophoneDevice", "*"]`; `!uid:<UID>` excludes an exact UID. Missing settings use defaults, and `input.microphones = []` allows every available input. If all inputs are excluded, the recorder retries without capturing audio until an eligible microphone becomes available. `~` in a TOML path is literal; use an absolute path instead of shell-style home-directory expansion. [config.example.toml](config.example.toml) describes every setting and selector.
+
+Use `[input]` and `[output]` tables, or dotted keys such as `output.dir = "recordings"` at the document root. Flat root keys are rejected. `--output` overrides `output.dir`, and the encoding and synchronization flags override their corresponding `[output]` values.
+
 # Background Recording
 
 The `service print` command prints a configuration without installing or starting it. It references the executable's current absolute path, so place the binary at its permanent location before generating the configuration. Run it in the foreground first to grant permissions.
+
+When a TOML file is loaded, the generated agent includes its absolute path so microphone preferences and encoding settings are read on each process start. The output directory is pinned as an absolute `--output` argument for recording and supervisor diagnostics. Regenerate and reload the agent after changing the desired output directory or configuration file path.
 
 ```sh
 mkdir -p "$HOME/Recordings/ambient" "$HOME/Library/LaunchAgents"

@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
-	"time"
 
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/config"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/recording"
 	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
 	"github.com/spf13/cobra"
@@ -20,18 +19,29 @@ func newRootCommand() (*cobra.Command, error) {
 		RunE: func(cmd *cobra.Command, args []string) error { return cmd.Help() },
 	}
 	root.SetVersionTemplate("{{.Version}}\n")
+	var configPath string
+	root.PersistentFlags().StringVar(&configPath, "config", "", "TOML configuration file (defaults to XDG configuration/ambient-recorder/config.toml)")
 	group := &cobra.Command{Use: "recording", Short: "Capture microphone and computer playback"}
-	group.AddCommand(newStartCommand())
+	group.AddCommand(newStartCommand(&configPath))
 	root.AddCommand(group)
 	service := &cobra.Command{Use: "service", Short: "Configure recording in the background"}
-	service.AddCommand(newServicePrintCommand())
+	service.AddCommand(newServicePrintCommand(&configPath))
 	root.AddCommand(service)
+	microphone := &cobra.Command{Use: "microphone", Short: "Inspect microphone inputs"}
+	microphone.AddCommand(newMicrophoneListCommand())
+	root.AddCommand(microphone)
+	configuration := &cobra.Command{Use: "config", Short: "Manage recorder configuration"}
+	configuration.AddCommand(newConfigInitCommand(&configPath))
+	root.AddCommand(configuration)
 	catalog := cobrahelptree.TechCatalog{
 		"ambient-recorder recording start": {
 			Summary: "Record continuously until interrupted",
 			Env: []cobrahelptree.EnvSpec{
 				{Name: "XDG_DATA_HOME", Description: "Absolute directory for user data; defaults to ~/.local/share"},
+				{Name: "XDG_CONFIG_HOME", Description: "Absolute directory for configuration; defaults to ~/.config"},
 				{Name: "AGENT", Description: "Set to 1, true, or yes for compact command output"},
+				{Name: "NO_COLOR", Description: "Any nonempty value disables colors in recording logs"},
+				{Name: "TERM", Description: "Set to dumb to disable colors in recording logs"},
 			},
 			Metadata: map[string]string{"output": "mono Ogg Opus", "platform": "macOS 14.2+", "writes": "recordings and diagnostic logs"},
 		},
@@ -42,41 +52,22 @@ func newRootCommand() (*cobra.Command, error) {
 	return root, nil
 }
 
-func newStartCommand() *cobra.Command {
-	cfg := recording.Config{Bitrate: 32000, Complexity: 2, SyncInterval: 5 * time.Second}
+func newStartCommand(configPath *string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "start", Short: "Record continuously until interrupted", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if cfg.Output == "" {
-				path, err := defaultOutput()
-				if err != nil {
-					return err
-				}
-				cfg.Output = path
+			resolved, _, err := recordingConfig(cmd, *configPath)
+			if err != nil {
+				return err
 			}
-			cfg.Agent = cobrahelptree.IsAgentMode()
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return recording.Run(ctx, cfg, cmd.ErrOrStderr())
+			return recording.Run(ctx, resolved, cmd.ErrOrStderr())
 		},
 	}
-	cmd.Flags().StringVar(&cfg.Output, "output", "", "Recording directory (defaults to XDG user data/ambient-recorder)")
-	cmd.Flags().IntVar(&cfg.Bitrate, "bitrate", cfg.Bitrate, "Opus bitrate in bits per second (6000..128000)")
-	cmd.Flags().IntVar(&cfg.Complexity, "complexity", cfg.Complexity, "Opus complexity (0..10; higher uses more CPU)")
-	cmd.Flags().DurationVar(&cfg.SyncInterval, "sync-interval", cfg.SyncInterval, "Interval between storage synchronization attempts")
+	cmd.Flags().String("output", "", "Recording directory (defaults to XDG user data/ambient-recorder)")
+	cmd.Flags().Int("bitrate", config.DefaultBitrate, "Opus bitrate in bits per second (6000..128000)")
+	cmd.Flags().Int("complexity", config.DefaultComplexity, "Opus complexity (0..10; higher uses more CPU)")
+	cmd.Flags().Duration("sync-interval", config.DefaultSyncInterval, "Interval between storage synchronization attempts")
 	return cmd
-}
-
-func defaultOutput() (string, error) {
-	if base := os.Getenv("XDG_DATA_HOME"); base != "" {
-		if !filepath.IsAbs(base) {
-			return "", fmt.Errorf("XDG_DATA_HOME must be an absolute path: %q", base)
-		}
-		return filepath.Join(base, "ambient-recorder"), nil
-	}
-	base, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve recording directory: %w", err)
-	}
-	return filepath.Join(base, ".local", "share", "ambient-recorder"), nil
 }

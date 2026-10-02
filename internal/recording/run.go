@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/capture"
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/microphone"
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/resample"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/storage"
 )
 
@@ -34,13 +36,22 @@ type Config struct {
 	Complexity   int
 	SyncInterval time.Duration
 	Agent        bool
+	Microphones  []string
 }
 
 type runner struct {
-	store    *storage.Store
-	journal  *journal
-	cfg      Config
-	progress chan struct{}
+	store                  *storage.Store
+	journal                *journal
+	cfg                    Config
+	progress               chan struct{}
+	monitor                *capture.Monitor
+	microphones            []capture.Device
+	preferences            []microphone.Selector
+	microphonesInitialized bool
+	lastMicrophoneRefresh  time.Time
+	microphoneFailures     map[string]time.Time
+	aggregateID            uint32
+	out                    *sink
 }
 
 // Run records until cancellation, retrying capture and storage faults. A native
@@ -50,6 +61,10 @@ func Run(ctx context.Context, cfg Config, stderr io.Writer) (err error) {
 	if cfg.Output == "" || cfg.Bitrate < 6000 || cfg.Bitrate > 128000 || cfg.Complexity < 0 || cfg.Complexity > 10 || cfg.SyncInterval <= 0 {
 		return errors.New("output is required; bitrate must be 6000..128000, complexity 0..10, and sync interval positive")
 	}
+	preferences, err := microphone.Parse(cfg.Microphones)
+	if err != nil {
+		return err
+	}
 	if ctx.Err() != nil {
 		return nil
 	}
@@ -57,7 +72,7 @@ func Run(ctx context.Context, cfg Config, stderr io.Writer) (err error) {
 	if err != nil {
 		return fmt.Errorf("resolve recording directory: %w", err)
 	}
-	r := &runner{cfg: cfg, progress: make(chan struct{}, 1)}
+	r := &runner{cfg: cfg, preferences: preferences, progress: make(chan struct{}, 1)}
 	// Register first so the watchdog covers initialization and final deferred I/O.
 	stopWatchdog := r.watchdog(stderr, operationTimeout)
 	defer stopWatchdog()
@@ -74,7 +89,19 @@ func Run(ctx context.Context, cfg Config, stderr io.Writer) (err error) {
 	j := &journal{store: s, stderr: stderr, agent: cfg.Agent}
 	defer func() { err = errors.Join(err, j.close()) }()
 	r.store, r.journal = s, j
-	j.event(slog.LevelInfo, "Recorder started", "pid", os.Getpid(), "bitrate", cfg.Bitrate, "complexity", cfg.Complexity, "sync_interval", cfg.SyncInterval.String())
+	monitor, watchErr := capture.WatchMicrophones()
+	if errors.Is(watchErr, capture.ErrCleanup) {
+		return watchErr
+	}
+	if watchErr != nil {
+		j.event(slog.LevelWarn, "Microphone notifications unavailable; polling inventory", "error", watchErr)
+	} else {
+		r.monitor = monitor
+		defer func() { err = errors.Join(err, monitor.Close()) }()
+	}
+	r.out = &sink{store: s, journal: j, rate: resample.Rate, bitrate: cfg.Bitrate, complexity: cfg.Complexity}
+	defer func() { err = errors.Join(err, r.out.close()) }()
+	j.event(slog.LevelInfo, "Recorder started", "pid", os.Getpid(), "bitrate", cfg.Bitrate, "complexity", cfg.Complexity, "sync_interval", cfg.SyncInterval.String(), "microphone_preferences", cfg.Microphones)
 	retry := initialRetry
 	for ctx.Err() == nil {
 		r.pulse()
@@ -82,6 +109,10 @@ func Run(ctx context.Context, cfg Config, stderr io.Writer) (err error) {
 			if errors.Is(err, capture.ErrCleanup) || ctx.Err() != nil {
 				j.event(slog.LevelError, "Capture session ended with an error", "error", err)
 				return err
+			}
+			if errors.Is(err, errMicrophoneSwitch) || errors.Is(err, errCaptureStalled) {
+				retry = initialRetry
+				continue
 			}
 			j.event(slog.LevelWarn, "Audio capture unavailable; retrying", "error", err, "retry_in", retry.String())
 		} else {
@@ -97,13 +128,18 @@ func Run(ctx context.Context, cfg Config, stderr io.Writer) (err error) {
 }
 
 func (r *runner) session(ctx context.Context) (err error) {
-	c, err := capture.Open()
+	c, err := r.openMicrophone()
 	if err != nil {
 		return err
 	}
+	r.aggregateID = c.AggregateID()
 	r.pulse()
-	r.journal.event(slog.LevelInfo, "Capture device opened", "microphone_id", c.MicID, "microphone_name", c.MicName, "sample_rate", c.Rate, "output_directory", r.cfg.Output)
-	out := &sink{store: r.store, journal: r.journal, rate: c.Rate, bitrate: r.cfg.Bitrate, complexity: r.cfg.Complexity}
+	r.logCapture(c)
+	source, err := r.newSource(c.Rate)
+	if err != nil {
+		r.aggregateID = 0
+		return errors.Join(err, c.Close())
+	}
 	pcm := make([]float32, capture.MaxFrames)
 	defer func() {
 		stopErr := c.Stop()
@@ -114,36 +150,24 @@ func (r *runner) session(ctx context.Context) (err error) {
 					err = errors.Join(err, readErr)
 					break
 				}
-				if writeErr := r.persist(ctx, out, chunk.At, pcm[:chunk.Frames]); writeErr != nil {
+				if writeErr := source.write(ctx, chunk.At, pcm[:chunk.Frames]); writeErr != nil {
 					err = errors.Join(err, writeErr)
 					break
 				}
 			}
 		}
-		err = errors.Join(err, stopErr, out.close(), c.Close())
+		err = errors.Join(err, stopErr, source.close(ctx), c.Close())
+		r.aggregateID = 0
 	}()
-	r.announce(c)
-	return r.consume(ctx, c, out, pcm)
+	return r.consume(ctx, c, source, pcm)
 }
 
-func (r *runner) announce(c *capture.Capture) {
-	if r.journal.stderr == nil {
-		return
-	}
-	name := c.MicName
-	if name == "" {
-		name = "name unavailable"
-	}
-	format := "Microphone: %q (device %d, %d Hz)\nComputer playback: all applications\nOutput directory: %s\n"
-	if r.journal.agent {
-		format = "microphone=%q device_id=%d sample_rate=%d\nplayback=system\noutput=%s\n"
-	}
-	if _, err := fmt.Fprintf(r.journal.stderr, format, name, c.MicID, c.Rate, r.cfg.Output); err != nil {
-		r.journal.event(slog.LevelWarn, "Startup diagnostic failed", "error", err)
-	}
+func (r *runner) logCapture(c *capture.Capture) {
+	fields := append(microphoneFields(c.Mic), "sample_rate", c.Rate, "playback", "system", "output_directory", r.cfg.Output)
+	r.journal.event(slog.LevelInfo, "Capture device opened", fields...)
 }
 
-func (r *runner) consume(ctx context.Context, c *capture.Capture, out *sink, pcm []float32) error {
+func (r *runner) consume(ctx context.Context, c *capture.Capture, source *source, pcm []float32) error {
 	tick := time.NewTicker(pollInterval)
 	defer tick.Stop()
 	lastFrame, lastSync, lastStatus := time.Now(), time.Now(), time.Now()
@@ -157,6 +181,9 @@ func (r *runner) consume(ctx context.Context, c *capture.Capture, out *sink, pcm
 				r.journal.event(slog.LevelWarn, "Capture wall clock recalibrated", "clock_shift", shift.String())
 			}
 			lastClock = time.Now()
+			if r.microphoneSelectionChanged(c) {
+				return errMicrophoneSwitch
+			}
 		}
 		chunk, err := c.Read(pcm)
 		if err != nil {
@@ -171,7 +198,7 @@ func (r *runner) consume(ctx context.Context, c *capture.Capture, out *sink, pcm
 				}
 			}
 			previous = chunk
-			if err := r.persist(ctx, out, chunk.At, pcm[:chunk.Frames]); err != nil {
+			if err := source.write(ctx, chunk.At, pcm[:chunk.Frames]); err != nil {
 				return err
 			}
 			frames += uint64(chunk.Frames)
@@ -184,11 +211,11 @@ func (r *runner) consume(ctx context.Context, c *capture.Capture, out *sink, pcm
 		if chunk.Frames == 0 && changed {
 			return errors.New("microphone or capture format changed")
 		}
-		if time.Since(lastFrame) > captureTimeout {
-			return errors.New("no capture frames received for five seconds")
+		if err := r.checkCaptureTimeout(c.Mic, lastFrame); err != nil {
+			return err
 		}
 		if time.Since(lastSync) >= r.cfg.SyncInterval {
-			if err := errors.Join(out.sync(), r.journal.sync()); err != nil {
+			if err := errors.Join(r.out.sync(), r.journal.sync()); err != nil {
 				r.journal.event(slog.LevelWarn, "Storage synchronization failed", "error", err)
 			}
 			lastSync = time.Now()

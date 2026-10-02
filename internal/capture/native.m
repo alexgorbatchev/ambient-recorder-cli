@@ -10,9 +10,10 @@
 #include <string.h>
 #include <limits.h>
 #include "native.h"
+#include "properties.h"
 
 _Static_assert(ATOMIC_LLONG_LOCK_FREE == 2, "capture requires lock-free native counters");
-enum { AR_MAX_STREAMS = 32, AR_MAX_WATCHES = AR_MAX_STREAMS + 4 };
+enum { AR_MAX_WATCHES = AR_MAX_STREAMS + 3 };
 typedef struct {
     ARChunk info;
     float pcm[AR_MAX_FRAMES];
@@ -38,33 +39,6 @@ struct ARCapture {
     unsigned watch_count;
     ARBlock blocks[AR_QUEUE_BLOCKS];
 };
-
-static OSStatus get_property(AudioObjectID object, AudioObjectPropertySelector selector, AudioObjectPropertyScope scope, UInt32 *size, void *data) {
-    AudioObjectPropertyAddress address = {selector, scope, kAudioObjectPropertyElementMain};
-    return AudioObjectGetPropertyData(object, &address, 0, NULL, size, data);
-}
-
-static char *copy_cf_string(CFStringRef string) {
-    CFIndex size = CFStringGetMaximumSizeForEncoding(CFStringGetLength(string), kCFStringEncodingUTF8);
-    if (size < 0 || size == LONG_MAX) return NULL;
-    size++;
-    char *value = malloc((size_t)size);
-    if (value && !CFStringGetCString(string, value, size, kCFStringEncodingUTF8)) {
-        free(value);
-        return NULL;
-    }
-    return value;
-}
-
-char *ar_capture_microphone_name(ARCapture *capture) {
-    CFStringRef name = NULL;
-    UInt32 size = sizeof(name);
-    OSStatus status = get_property(capture->microphone, kAudioObjectPropertyName, kAudioObjectPropertyScopeGlobal, &size, &name);
-    if (status != noErr || !name) return NULL;
-    char *value = copy_cf_string(name);
-    CFRelease(name);
-    return value;
-}
 
 // The HAL owns these buffers. No allocation, lock, Go callback or I/O is allowed here.
 static OSStatus capture_io(AudioObjectID device, const AudioTimeStamp *now, const AudioBufferList *input,
@@ -133,6 +107,7 @@ uint64_t ar_capture_dropped(ARCapture *capture) { return atomic_load_explicit(&c
 int ar_capture_changed(ARCapture *capture) { return atomic_load_explicit(&capture->changed, memory_order_relaxed); }
 double ar_capture_rate(ARCapture *capture) { return capture->rate; }
 uint32_t ar_capture_microphone(ARCapture *capture) { return capture->microphone; }
+uint32_t ar_capture_aggregate(ARCapture *capture) { return capture->aggregate; }
 
 static OSStatus property_changed(AudioObjectID object, UInt32 count, const AudioObjectPropertyAddress *addresses, void *user_data) {
     ARCapture *capture = user_data;
@@ -228,27 +203,11 @@ static OSStatus configure_streams(ARCapture *capture, uint32_t minimum_channels,
     return noErr;
 }
 
-static OSStatus input_channels(AudioObjectID device, uint32_t *channels) {
-    AudioObjectPropertyAddress address = {kAudioDevicePropertyStreamConfiguration, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain};
-    UInt32 size = 0;
-    OSStatus status = AudioObjectGetPropertyDataSize(device, &address, 0, NULL, &size);
-    if (status != noErr) return status;
-    AudioBufferList *buffers = calloc(1, size);
-    if (!buffers) return kAudioHardwareUnspecifiedError;
-    status = AudioObjectGetPropertyData(device, &address, 0, NULL, &size, buffers);
-    *channels = 0;
-    if (status == noErr) for (UInt32 i = 0; i < buffers->mNumberBuffers; i++) *channels += buffers->mBuffers[i].mNumberChannels;
-    free(buffers);
-    return status;
-}
-
 static OSStatus create_aggregate(ARCapture *capture) {
-    UInt32 size = sizeof(capture->microphone);
-    OSStatus status = get_property(kAudioObjectSystemObject, kAudioHardwarePropertyDefaultInputDevice, kAudioObjectPropertyScopeGlobal, &size, &capture->microphone);
-    if (status != noErr || capture->microphone == kAudioObjectUnknown) return kAudioHardwareBadDeviceError;
+    if (capture->microphone == kAudioObjectUnknown) return kAudioHardwareBadDeviceError;
     CFStringRef microphone_uid = NULL;
-    size = sizeof(microphone_uid);
-    status = get_property(capture->microphone, kAudioDevicePropertyDeviceUID, kAudioObjectPropertyScopeGlobal, &size, &microphone_uid);
+    UInt32 size = sizeof(microphone_uid);
+    OSStatus status = get_property(capture->microphone, kAudioDevicePropertyDeviceUID, kAudioObjectPropertyScopeGlobal, &size, &microphone_uid);
     if (status != noErr) return status;
     size = sizeof(capture->rate);
     status = get_property(capture->microphone, kAudioDevicePropertyNominalSampleRate, kAudioObjectPropertyScopeGlobal, &size, &capture->rate);
@@ -281,7 +240,7 @@ static OSStatus create_aggregate(ARCapture *capture) {
     return status;
 }
 
-ARCapture *ar_capture_open(char *error, size_t error_size, int32_t *cleanup_status) {
+ARCapture *ar_capture_open(uint32_t microphone, char *error, size_t error_size, int32_t *cleanup_status) {
     *cleanup_status = noErr;
     error[0] = 0;
     @autoreleasepool {
@@ -289,6 +248,7 @@ ARCapture *ar_capture_open(char *error, size_t error_size, int32_t *cleanup_stat
         if (!authorize_microphone(error, error_size)) return NULL;
         ARCapture *capture = calloc(1, sizeof(*capture));
         if (!capture) { snprintf(error, error_size, "allocate capture buffer"); return NULL; }
+        capture->microphone = microphone;
         const char *operation = "create microphone and playback aggregate";
         OSStatus status = create_aggregate(capture);
         if (status == noErr) {
@@ -300,7 +260,6 @@ ARCapture *ar_capture_open(char *error, size_t error_size, int32_t *cleanup_stat
             if (status == noErr) status = get_property(capture->tap, kAudioTapPropertyFormat, kAudioObjectPropertyScopeGlobal, &size, &tap_format);
             if (status == noErr) status = configure_streams(capture, channels + tap_format.mChannelsPerFrame, error, error_size);
         }
-        if (status == noErr) status = watch_property(capture, kAudioObjectSystemObject, kAudioHardwarePropertyDefaultInputDevice, kAudioObjectPropertyScopeGlobal);
         if (status == noErr) status = watch_property(capture, capture->microphone, kAudioDevicePropertyDeviceIsAlive, kAudioObjectPropertyScopeGlobal);
         if (status == noErr) status = watch_property(capture, capture->microphone, kAudioDevicePropertyNominalSampleRate, kAudioObjectPropertyScopeGlobal);
         if (status == noErr) status = watch_property(capture, capture->microphone, kAudioDevicePropertyStreamConfiguration, kAudioObjectPropertyScopeInput);

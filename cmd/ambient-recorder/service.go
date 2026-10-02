@@ -12,19 +12,16 @@ import (
 
 const serviceLabel = "com.alexgorbatchev.ambient-recorder"
 
-func newServicePrintCommand() *cobra.Command {
+func newServicePrintCommand(configPath *string) *cobra.Command {
 	var output string
 	cmd := &cobra.Command{
 		Use: "print", Short: "Print a macOS configuration that restarts recording after exit", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if output == "" {
-				var err error
-				output, err = defaultOutput()
-				if err != nil {
-					return err
-				}
+			cfg, loaded, err := recordingConfig(cmd, *configPath)
+			if err != nil {
+				return err
 			}
-			path, err := filepath.Abs(output)
+			path, err := filepath.Abs(cfg.Output)
 			if err != nil {
 				return fmt.Errorf("resolve recording directory: %w", err)
 			}
@@ -36,7 +33,7 @@ func newServicePrintCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("resolve recorder executable symlink: %w", err)
 			}
-			return writeAgent(cmd.OutOrStdout(), binary, path)
+			return writeAgent(cmd.OutOrStdout(), binary, path, loaded)
 		},
 	}
 	cmd.Flags().StringVar(&output, "output", "", "Recording directory (defaults to XDG user data/ambient-recorder)")
@@ -45,7 +42,11 @@ func newServicePrintCommand() *cobra.Command {
 
 // launchd owns process supervision. Printing a plist is read-only; the user
 // chooses the stable binary location and explicitly loads the per-user agent.
-func writeAgent(w io.Writer, binary, output string) error {
+func writeAgent(w io.Writer, binary, output, configPath string) error {
+	args := []string{binary, "recording", "start", "--output", output}
+	if configPath != "" {
+		args = append(args, "--config", configPath)
+	}
 	if _, err := io.WriteString(w, xml.Header); err != nil {
 		return err
 	}
@@ -63,7 +64,7 @@ func writeAgent(w io.Writer, binary, output string) error {
 		value any
 	}{
 		{"Label", serviceLabel},
-		{"ProgramArguments", []string{binary, "recording", "start", "--output", output}},
+		{"ProgramArguments", args},
 		{"KeepAlive", true},
 		{"ThrottleInterval", 5},
 		{"StandardErrorPath", filepath.Join(output, "supervisor.stderr.log")},

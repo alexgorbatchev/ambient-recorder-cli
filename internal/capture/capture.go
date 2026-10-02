@@ -30,12 +30,11 @@ var ErrCleanup = errors.New("native capture cleanup failed; process restart requ
 
 // Capture is owned by one goroutine. Native callbacks access only native memory.
 type Capture struct {
-	native  *C.ARCapture
-	Rate    int
-	MicID   uint32
-	MicName string
-	anchor  time.Time
-	host    int64
+	native *C.ARCapture
+	Rate   int
+	Mic    Device
+	anchor time.Time
+	host   int64
 }
 
 // Chunk carries the acquisition timestamp, not the time Go received the data.
@@ -48,10 +47,10 @@ type Chunk struct {
 }
 
 // Open requests microphone permission and starts the private aggregate.
-func Open() (*Capture, error) {
+func Open(microphone uint32) (*Capture, error) {
 	var message [512]C.char
 	var cleanup C.int32_t
-	native := C.ar_capture_open(&message[0], C.size_t(len(message)), &cleanup)
+	native := C.ar_capture_open(C.uint32_t(microphone), &message[0], C.size_t(len(message)), &cleanup)
 	if native == nil {
 		if cleanup != 0 {
 			return nil, fmt.Errorf("open audio capture: %s: %w", C.GoString(&message[0]), ErrCleanup)
@@ -59,18 +58,23 @@ func Open() (*Capture, error) {
 		return nil, fmt.Errorf("open audio capture: %s", C.GoString(&message[0]))
 	}
 	anchor, host := hostSnapshot()
-	var name string
-	if value := C.ar_capture_microphone_name(native); value != nil {
-		name = C.GoString(value)
-		C.free(unsafe.Pointer(value))
-	}
-	return &Capture{native: native, Rate: int(C.ar_capture_rate(native)), MicID: uint32(C.ar_capture_microphone(native)), MicName: name, anchor: anchor, host: host}, nil
+	c := &Capture{native: native, Rate: int(C.ar_capture_rate(native)), Mic: describeDevice(uint32(C.ar_capture_microphone(native))), anchor: anchor, host: host}
+	return c, nil
 }
 
 // RecalibrateClock follows wall-clock changes without assigning queued blocks
 // their arrival time. The owner must call it periodically during capture.
 func (c *Capture) RecalibrateClock() time.Duration {
 	return c.reanchor(hostSnapshot())
+}
+
+// AggregateID identifies this session's private mixing device, which must be
+// excluded from source selection when enumerating devices in the same process.
+func (c *Capture) AggregateID() uint32 {
+	if c.native == nil {
+		return 0
+	}
+	return uint32(C.ar_capture_aggregate(c.native))
 }
 
 func hostSnapshot() (time.Time, int64) {

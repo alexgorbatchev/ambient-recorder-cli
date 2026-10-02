@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/testdir"
 )
 
 func TestHelpAndVersion(t *testing.T) {
@@ -29,7 +31,8 @@ func TestHelpAndVersion(t *testing.T) {
 }
 
 func TestServiceConfiguration(t *testing.T) {
-	root := t.TempDir() + "/audio & notes"
+	t.Setenv("XDG_CONFIG_HOME", testdir.New(t))
+	root := testdir.New(t) + "/audio & notes"
 	out, diagnostic, err := execute(t, context.Background(), "service", "print", "--output", root)
 	if err != nil || diagnostic != "" {
 		t.Fatalf("service configuration: %v %s", err, diagnostic)
@@ -45,15 +48,16 @@ func TestServiceConfiguration(t *testing.T) {
 }
 
 func TestRecordingValidationAndCancellation(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", testdir.New(t))
 	for _, flags := range [][]string{{"--bitrate", "1"}, {"--complexity", "11"}, {"--sync-interval", "0s"}, {"extra"}} {
-		_, _, err := execute(t, context.Background(), append([]string{"recording", "start", "--output", t.TempDir()}, flags...)...)
+		_, _, err := execute(t, context.Background(), append([]string{"recording", "start", "--output", testdir.New(t)}, flags...)...)
 		if err == nil {
 			t.Fatalf("accepted invalid arguments: %v", flags)
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, _, err := execute(t, ctx, "recording", "start", "--output", t.TempDir()); err != nil {
+	if _, _, err := execute(t, ctx, "recording", "start", "--output", testdir.New(t)); err != nil {
 		t.Fatalf("pre-canceled recording: %v", err)
 	}
 }

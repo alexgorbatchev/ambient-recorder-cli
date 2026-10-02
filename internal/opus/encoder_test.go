@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/testdir"
 )
 
 func TestRoundTrip(t *testing.T) {
@@ -116,7 +118,7 @@ func decodePackets(t *testing.T, decoder string, source [][]byte) []byte {
 }
 
 func TestEncoderWriteFailure(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "readonly")
+	path := filepath.Join(testdir.New(t), "readonly")
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +222,7 @@ func parsePages(t *testing.T, b []byte) oggPages {
 
 func buildDecoder(t *testing.T) string {
 	t.Helper()
-	binary := filepath.Join(t.TempDir(), "decode")
+	binary := filepath.Join(testdir.New(t), "decode")
 	cmd := exec.Command("clang", "testdata/decode.c", "-I../../.tmp/native/include/opus", "../../.tmp/native/lib/libopus.a", "-lm", "-o", binary)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("compile native decoder: %v\n%s", err, out)

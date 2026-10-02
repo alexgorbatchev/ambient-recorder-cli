@@ -1,0 +1,134 @@
+# ambient-recorder configuration reference
+# For users configuring continuous microphone and computer playback recording.
+# All supported settings are shown below, grouped into [input] and [output].
+# Omitted settings inherit defaults; unknown keys and flat root keys are rejected.
+# Dotted keys such as output.dir are also valid TOML at the document root.
+#
+# Use this example directly:
+#   ./bin/ambient-recorder recording start --config ./config.example.toml
+# List microphone names, stable UIDs, and connection details:
+#   ./bin/ambient-recorder microphone list
+# Generate a default user configuration without overwriting an existing file:
+#   ./bin/ambient-recorder config init
+#
+# Configuration discovery:
+#   $XDG_CONFIG_HOME/ambient-recorder/config.toml, when XDG_CONFIG_HOME is set;
+#   otherwise ~/.config/ambient-recorder/config.toml.
+# XDG_CONFIG_HOME and XDG_DATA_HOME must be absolute paths when set.
+# An absent default file is optional; an explicitly selected file must exist.
+#
+# Precedence: explicitly supplied CLI flags > TOML values > built-in defaults.
+# Settings are read at process startup. Restart recording to apply file edits.
+# Invalid TOML, incorrect value types, and unknown keys fail before recording.
+#
+# Capture mixes the chosen microphone and computer playback into one mono track.
+# Channels, capture sources, and the fixed 48 kHz encoder input are not settings.
+
+[output]
+
+# output.dir: nonempty string naming the recording directory.
+# Default: $XDG_DATA_HOME/ambient-recorder, or
+#          ~/.local/share/ambient-recorder when XDG_DATA_HOME is unset.
+# This example intentionally uses a relative directory. Relative paths resolve
+# against the process working directory, not the configuration file's directory.
+# For background recording, use an absolute path appropriate for your machine.
+# Literal '~' and environment variables inside TOML strings are not expanded.
+# Remove this setting to inherit the default user data directory.
+# CLI override: --output <directory>
+#
+# Files beneath this directory use local calendar time:
+#   YYYY/MM/DD/HH-MM-SS.000000000.opus  (nine fractional-second digits)
+#   YYYY/MM/DD/log.nljson             (newline-delimited JSON diagnostics)
+# Filenames identify segment start time. Segments rotate at hour boundaries;
+# process restarts create new timestamped files without overwriting recordings.
+# Microphone switching keeps the current file and encoder open.
+# Newly created directories use mode 0700; recordings and logs use mode 0600.
+# Only one recorder can hold the lock for a given output directory.
+# Recordings and logs have no automatic retention limit or deletion policy.
+#
+# service print pins this directory in its generated launchd --output argument.
+# After changing output for an installed service, regenerate and reload its plist.
+dir = "~/.local/share/ambient-recorder"
+
+# output.bitrate: integer target Opus bitrate in bits per second.
+# Default: 32000 (32 kbit/s). Accepted range: 6000 through 128000, inclusive.
+# Lower values reduce storage at the expense of audio quality; higher values
+# allow more audio detail. This sets a target, not an exact file size: the encoder
+# uses variable bitrate and the Ogg container adds overhead.
+# CLI override: --bitrate <integer>
+# Codec reference: https://www.rfc-editor.org/rfc/rfc6716.html#section-2.1.1
+bitrate = 32000
+
+# output.complexity: integer controlling Opus encoder computational effort.
+# Default: 2. Accepted range: 0 through 10, inclusive.
+# 0 uses the least encoder effort; 10 uses the most. Higher effort can improve
+# audio quality at the same target bitrate, while consuming more encoder CPU.
+# The default of 2 favors low CPU usage. This is not a total process CPU limit,
+# a percentage, a channel count, or a recording/transcription quality guarantee.
+# CLI override: --complexity <integer>
+# Codec reference: https://www.rfc-editor.org/rfc/rfc6716.html#section-2.1.5
+complexity = 2
+
+# output.sync_interval: string specifying a positive Go duration.
+# Default: "5s". Examples: "500ms", "5s", "1m", "1m30s".
+# Units: ns, us (or µs), ms, s, m, h. Fractional values such as "1.5s" work.
+# Zero, negative values, bare numbers, and a 'd' day unit are invalid.
+# CLI override: --sync-interval <duration>
+#
+# During active capture, the recorder periodically calls fsync on the current
+# audio file and daily diagnostic log. Audio and log writes happen continuously;
+# this interval controls disk synchronization, not buffering or file rotation.
+# Closing a segment also synchronizes it. Syncing does not close the encoder.
+# Shorter intervals request more frequent disk flushes; longer intervals reduce
+# that I/O work but leave more recent writes unsynchronized between flushes.
+# Sync calls are synchronous and can delay audio processing on slow storage.
+# The interval is approximate, not a strict bound on recoverable audio loss.
+# It does not guarantee an intact final Ogg page or recording through a crash.
+sync_interval = "5s"
+
+[input]
+
+# input.microphones: array of strings, ordered from most preferred to least preferred.
+# Default: ["*"]. Positive entries set priority; entries starting with '!' exclude.
+# Each string is one of:
+#   "Exact device name"  Case-sensitive name copied from microphone list.
+#   "LG Ultra*"          Name pattern: '*' matches zero or more characters.
+#                        Use '*Microphone' for a suffix, '*Ultra*' for a substring.
+#                        Matching is case-sensitive and covers the whole name.
+#                        Only '*' is special; '?', brackets, and other punctuation
+#                        are literal. Patterns are not regular expressions.
+#   "uid:<UID>"          Exact stable UID copied from microphone list, with the
+#                        literal 'uid:' prefix. Useful for duplicate names; UID
+#                        values do not interpret '*' as a wildcard.
+#   "*"                  Every remaining microphone, trying the macOS default
+#                        input first, then the remaining devices by UID and ID.
+#   "!Exact device name" Exclude a name from every preference and fallback.
+#   "!LG Ultra*"         Exclude every microphone matching this name pattern.
+#   "!uid:<UID>"         Exclude one exact stable UID.
+# Exclusions apply globally regardless of position and override positive entries.
+# Numeric Core Audio device IDs are transient and are not preference selectors.
+# Empty or whitespace-only selectors, bare '!', and missing UID values are invalid.
+#
+# Unavailable preferences are skipped. An implicit final '*' keeps unlisted
+# microphones eligible unless excluded, even if you omit '*'; an empty array
+# falls back to all available microphones. Put '*' after positive preferences:
+# it consumes every remaining eligible device, so later positive preferences
+# cannot change the order. Later exclusions still apply globally.
+# If exclusions leave no eligible microphone (including with '!*'), recording
+# cannot capture audio and retries until an eligible device becomes available.
+#
+# The recorder automatically switches when a higher-priority input is available
+# and falls back when an input disappears. Capture failures normally try the
+# next preference and temporarily defer the failed device for 30 seconds.
+# Device connections, disconnections, and selection changes are logged to the
+# daily log. Switching keeps the recording file open but can cause capture gaps.
+# Preferences have no corresponding CLI override.
+microphones = ["*"]
+
+# Alternative examples: replace placeholder names/UIDs with microphone list
+# output, and replace the active input.microphones value above rather than duplicating
+# the TOML key. A name or pattern can select multiple matching devices.
+# microphones = ["My USB microphone", "My headset microphone", "*"]
+# microphones = ["uid:REPLACE_WITH_DEVICE_UID", "*"]
+# microphones = ["LG Ultra*", "!Virtual*", "*"]
+# microphones = ["!LG Ultra*", "*"]

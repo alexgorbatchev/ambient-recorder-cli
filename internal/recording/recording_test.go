@@ -19,15 +19,18 @@ import (
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/testdir"
 )
 
-func TestStartupAnnouncement(t *testing.T) {
+func TestStartupCaptureLog(t *testing.T) {
 	for _, agent := range []bool{false, true} {
 		for _, name := range []string{"USB Microphone – Desk", ""} {
 			var output bytes.Buffer
-			path := filepath.Join(t.TempDir(), "meeting audio")
-			r := &runner{cfg: Config{Output: path}, journal: &journal{stderr: &output, agent: agent}}
-			r.announce(&capture.Capture{MicID: 126, MicName: name, Rate: 16000})
+			path := filepath.Join(testdir.New(t), "meeting audio")
+			r := &runner{cfg: Config{Output: path}, journal: testJournal(t, &output, agent)}
+			r.logCapture(&capture.Capture{Rate: 16000, Mic: capture.Device{ID: 126, Name: name, Transport: "Bluetooth", Type: "Headset microphone", Manufacturer: "Example Audio", Model: "Desk headset"}})
 			got := output.String()
-			for _, want := range []string{path, "126", "16000"} {
+			if name != "" && !agent {
+				t.Logf("human capture log:\n%s", got)
+			}
+			for _, want := range []string{path, "Bluetooth"} {
 				if !strings.Contains(got, want) {
 					t.Fatalf("startup output missing %q: %s", want, got)
 				}
@@ -35,9 +38,46 @@ func TestStartupAnnouncement(t *testing.T) {
 			if name != "" && !strings.Contains(got, name) {
 				t.Fatalf("startup output missing microphone name: %s", got)
 			}
-			if !agent && !strings.Contains(got, "Computer playback: all applications") {
-				t.Fatalf("startup output missing playback source: %s", got)
+			if !strings.Contains(got, "Capture device opened") {
+				t.Fatalf("capture startup must include its log message: %s", got)
 			}
+			if agent {
+				if strings.Count(got, "\n") != 1 {
+					t.Fatalf("agent capture event must remain one JSON line: %s", got)
+				}
+				var event map[string]any
+				if err := json.Unmarshal([]byte(got), &event); err != nil {
+					t.Fatal(err)
+				}
+				if event["level"] != "INFO" || event["playback"] != "system" || event["output_directory"] != path {
+					t.Fatalf("startup log lost its level or sources: %v", event)
+				}
+			} else {
+				for _, want := range []string{" INF Capture device opened ", "connection=Bluetooth", `playback="all applications"`, `output="` + path + `"`} {
+					if !strings.Contains(got, want) {
+						t.Fatalf("startup output missing readable detail %q: %s", want, got)
+					}
+				}
+				if strings.Count(got, "\n") != 1 || strings.Contains(got, "\x1b") || strings.Contains(got, "time=") {
+					t.Fatalf("redirected human output must be one plain tint event: %s", got)
+				}
+			}
+			if records := journalRecords(t, r.journal); len(records) != 1 || records[0]["microphone_name"] != name || records[0]["output_directory"] != path || records[0]["playback"] != "system" {
+				t.Fatalf("startup capture metadata missing from the daily log: %v", records)
+			}
+		}
+	}
+}
+
+func TestStartupMissingDeviceDetails(t *testing.T) {
+	for _, agent := range []bool{false, true} {
+		var output bytes.Buffer
+		r := &runner{journal: testJournal(t, &output, agent)}
+		r.logCapture(&capture.Capture{})
+		got := output.String()
+		records := journalRecords(t, r.journal)
+		if len(records) != 1 || records[0]["microphone_manufacturer"] != "" || records[0]["microphone_model"] != "" || (!agent && (strings.Contains(got, "microphone_manufacturer=") || strings.Contains(got, "microphone_model="))) {
+			t.Fatalf("missing metadata must remain empty in the capture log: %s records=%v", got, records)
 		}
 	}
 }

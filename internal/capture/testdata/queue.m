@@ -1,10 +1,24 @@
 #include "../native.m"
+#include "../devices.m"
 #include <assert.h>
 
 int main(void) {
+    ARDeviceMonitor monitor = {0};
+    assert(!ar_monitor_changed(&monitor));
+    devices_changed(kAudioObjectSystemObject, 0, NULL, &monitor);
+    assert(ar_monitor_changed(&monitor));
+    assert(!ar_monitor_changed(&monitor));
     char *name = copy_cf_string(CFSTR("USB Microphone – Desk"));
     assert(name && strcmp(name, "USB Microphone – Desk") == 0);
     free(name);
+    assert(strcmp(transport_name(kAudioDeviceTransportTypeBluetooth), "Bluetooth") == 0);
+    assert(strcmp(transport_name(kAudioDeviceTransportTypeUSB), "USB") == 0);
+    assert(strcmp(transport_name(kAudioDeviceTransportTypeBuiltIn), "Built-in") == 0);
+    assert(strcmp(transport_name(kAudioDeviceTransportTypeDisplayPort), "DisplayPort") == 0);
+    assert(strcmp(transport_name(UINT32_MAX), "Unavailable") == 0);
+    assert(strcmp(terminal_name(kAudioStreamTerminalTypeHeadsetMicrophone), "Headset microphone") == 0);
+    assert(strcmp(terminal_name(kAudioStreamTerminalTypeMicrophone), "Microphone") == 0);
+    assert(strcmp(terminal_name(UINT32_MAX), "Unavailable") == 0);
     ARCapture *capture = calloc(1, sizeof(*capture));
     assert(capture);
     capture->channels = 3;

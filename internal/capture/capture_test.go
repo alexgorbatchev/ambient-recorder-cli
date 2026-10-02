@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/testdir"
 )
 
 func TestClockRecalibration(t *testing.T) {
@@ -26,7 +28,7 @@ func TestClockRecalibration(t *testing.T) {
 }
 
 func TestNativeQueue(t *testing.T) {
-	binary := filepath.Join(t.TempDir(), "queue-test")
+	binary := filepath.Join(testdir.New(t), "queue-test")
 	cmd := exec.Command("clang", "-fblocks", "-mmacosx-version-min=14.2", "testdata/queue.m", "-framework", "CoreAudio", "-framework", "Foundation", "-framework", "AVFoundation", "-o", binary)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("compile capture queue test: %v\n%s", err, out)
