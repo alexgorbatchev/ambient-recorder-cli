@@ -21,6 +21,7 @@ type journal struct {
 	file    *os.File
 	day     string
 	handler *slog.JSONHandler
+	console *slog.Logger
 	stderr  io.Writer
 	agent   bool
 }
@@ -80,35 +81,24 @@ func (j *journal) repairTail(at time.Time) error {
 func (j *journal) event(level slog.Level, message string, args ...any) {
 	r := slog.NewRecord(time.Now(), level, message, 0)
 	r.Add(args...)
-	if err := j.record(r); err != nil {
-		r.Add("log_error", err)
-		if j.stderr != nil {
-			if fallbackErr := slog.NewJSONHandler(j.stderr, nil).Handle(context.Background(), r); fallbackErr != nil {
-				// Both diagnostic sinks failed. Audio capture continues independently.
-				return
-			}
-		}
+	err := j.record(r)
+	if err != nil {
+		args = append(args, "log_error", err)
 	}
-	if level >= slog.LevelWarn && j.stderr != nil {
-		prefix := "[WARN]"
-		if j.agent {
-			prefix = "WARN:"
-		}
-		if _, err := fmt.Fprintf(j.stderr, "%s %s", prefix, message); err != nil {
-			return // best-effort console diagnostic after writing the daily log
-		}
-		r.Attrs(func(a slog.Attr) bool {
-			if j.agent || a.Key == "error" {
-				if _, err := fmt.Fprintf(j.stderr, " %s=%v", a.Key, a.Value.Any()); err != nil {
-					return false
-				}
-			}
-			return true
-		})
-		if _, err := fmt.Fprintln(j.stderr); err != nil {
-			return // best-effort console diagnostic after writing the daily log
-		}
+	if j.stderr == nil || (level < slog.LevelInfo && err == nil) {
+		return
 	}
+	// Startup inventory belongs in diagnostics; the capture event identifies
+	// the chosen input. Connection changes still reach the human console.
+	if !j.agent && err == nil && message == "Microphone available" {
+		return
+	}
+	if j.console == nil {
+		j.console = newConsoleLogger(j.stderr, j.agent)
+	}
+	// Console writes are best effort; slog.Logger ignores writer errors, and the
+	// daily diagnostic write above proceeds independently of the console sink.
+	j.console.Log(context.Background(), level, message, args...)
 }
 
 func (j *journal) sync() error {
