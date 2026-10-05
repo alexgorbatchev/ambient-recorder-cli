@@ -54,6 +54,9 @@ func (s *sink) open(at time.Time, hour string) error {
 	if err != nil {
 		return errors.Join(err, f.Close())
 	}
+	if err := s.store.MarkCurrent(f); err != nil {
+		return errors.Join(err, e.Close(), f.Close())
+	}
 	s.file, s.encoder, s.hour, s.frames = f, e, hour, 0
 	s.journal.event(slog.LevelInfo, "Recording segment opened", "path", f.Name(), "acquired_at", at, "sample_rate", s.rate, "channels", 1)
 	return nil
@@ -70,7 +73,7 @@ func (s *sink) close() error {
 	if s.encoder == nil {
 		return nil
 	}
-	err := errors.Join(s.encoder.Close(), s.file.Sync(), s.file.Close())
+	err := errors.Join(s.store.ClearCurrent(), s.encoder.Close(), s.file.Sync(), s.file.Close())
 	s.journal.event(slog.LevelInfo, "Recording segment closed", "path", s.file.Name(), "input_frames", s.frames, "error", err)
 	s.encoder, s.file = nil, nil
 	return err

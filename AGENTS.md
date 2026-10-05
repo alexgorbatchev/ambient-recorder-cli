@@ -32,6 +32,10 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
 
 ## CLI and recording contracts
 
+- Keep the approved path commands named `config print-dir` and `recording
+  print-file`. Print only an absolute path plus a newline in both output modes;
+  no open recording file means empty stdout and a nonzero exit. Current-file
+  inspection must reject stale state after recorder exit.
 - Maintain the embedded [usage reference](cmd/ambient-recorder/SKILL.md) in the
   same change as any command, argument, flag, default, environment, output or
   side-effect change. Update `last_modified`; verify against the implementation

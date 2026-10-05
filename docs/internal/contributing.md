@@ -1,6 +1,6 @@
 ---
 created_on: 2026-09-30 12:30
-last_modified: 2026-10-02 15:04
+last_modified: 2026-10-05 11:47
 status: current
 ---
 
@@ -32,6 +32,8 @@ The aggregate's nominal sample rate determines the mixed PCM clock. A verified B
 Apple's AudioConverterFillComplexBuffer converts capture PCM to mono 48 kHz outside the real-time callback, using normal priming and medium quality. The input callback uses native-owned storage; it signals temporarily exhausted input separately from EOF and drains look-ahead when a capture session ends. A 48 kHz capture bypasses conversion. libopusenc owns encoder delay, pre-skip, final trimming, Ogg checksums and page construction. The Go wrapper uses its pull API, writes headers immediately, disables DTX and decision delay, and requests 100 ms page muxing. Encoder complexity defaults to 2, target bitrate to 32 kb/s. One Go goroutine owns the encoder across microphone sessions.
 
 Recording splits PCM at acquisition-time local hour boundaries, drains each encoder, synchronizes and closes it, then opens an exclusively allocated next segment. Filenames use HH-MM-SS.000000000.opus with nine fractional-second digits. Creation never scans, parses, or migrates existing filenames. If the exact timestamp path exists, reservation retries using the actual current clock and its calendar directory. A rooted filesystem and advisory kernel lock confine paths and exclude another recorder using the same directory.
+
+The recording sink publishes a relative `.recording.current` symlink after encoder initialization and holds an exclusive advisory lock on that segment until its file closes. It removes the pointer before finalization. Current-file inspection opens the storage root without creating directories, reads the pointer, and probes the target with a nonblocking shared lock. A successful probe means the recorder no longer owns the file and the pointer is stale; a conflicting exclusive lock identifies an open segment. Concurrent queries use compatible shared locks so they cannot mistake each other for a recorder. The result is a snapshot of an open file, which does not establish that capture is currently producing audio. Recording processes from builds without this publication mechanism expose no current-file pointer.
 
 Microphone inventory provides stable UIDs and device-reported metadata without opening capture. Preferences match exact names or uid:<UID>, with * trying the default input first and then remaining inputs in stable UID order. Unlisted inputs remain eligible through an implicit final *. Inventory is refreshed on native device/default-input notifications and every five seconds; selection is checked once per second. Connect/disconnect events include identity and metadata, and the recorder's own private aggregate is excluded by its actual device ID. Failed capture inputs receive a 30-second cooldown while other inputs are tried. Capture handover drains and closes native capture/conversion objects while preserving the current output file and encoder. Audio downtime can remain inside that file, so filenames alone are insufficient to identify every gap.
 

@@ -22,14 +22,14 @@ func newRootCommand() (*cobra.Command, error) {
 	var configPath string
 	root.PersistentFlags().StringVar(&configPath, "config", "", "TOML configuration file (defaults to XDG configuration/ambient-recorder/config.toml)")
 	group := &cobra.Command{Use: "recording", Short: "Capture microphone and computer playback"}
-	group.AddCommand(newStartCommand(&configPath))
+	group.AddCommand(newStartCommand(&configPath), newPrintFileCommand(&configPath))
 	root.AddCommand(group)
 	root.AddCommand(newServiceCommand(&configPath, userLaunchAgent))
 	microphone := &cobra.Command{Use: "microphone", Short: "Inspect microphone inputs"}
 	microphone.AddCommand(newMicrophoneListCommand())
 	root.AddCommand(microphone)
 	configuration := &cobra.Command{Use: "config", Short: "Manage recorder configuration"}
-	configuration.AddCommand(newConfigInitCommand(&configPath))
+	configuration.AddCommand(newConfigInitCommand(&configPath), newPrintDirCommand(&configPath))
 	root.AddCommand(configuration)
 	root.AddCommand(newSkillCommand())
 	catalog := cobrahelptree.TechCatalog{

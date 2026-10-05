@@ -4,7 +4,7 @@ description: Use when operating ambient-recorder to record audio, configure micr
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-01 22:02
-  last_modified: 2026-10-05 11:43
+  last_modified: 2026-10-05 11:55
   status: current
 ---
 
@@ -26,10 +26,12 @@ Inspect the listed names and stable `uid:<UID>` selectors, then edit the created
 | :--- | :--- | :--- |
 | `ambient-recorder` | `none` | Print help to stdout. |
 | `ambient-recorder config` | `none` | Print configuration command help. |
+| `ambient-recorder config print-dir` | `none` | Print the absolute configured/default recording directory followed by a newline in both output modes. Read configuration without creating directories or opening capture. |
 | `ambient-recorder config init` | `none` | Exclusively create default TOML and parent directories with owner-only permissions. Print its path; refuse to replace an existing file. |
 | `ambient-recorder microphone` | `none` | Print microphone command help. |
 | `ambient-recorder microphone list` | `none` | List currently available inputs, names, stable UIDs, transient IDs, default status, connection, type, manufacturer, and model. Capture is not opened. |
 | `ambient-recorder recording` | `none` | Print recording command help. |
+| `ambient-recorder recording print-file` | `none` | Print the absolute open recording file path followed by a newline in both output modes. Inspect the configured/default directory or --output override without creating files or opening capture. If no file is open, leave stdout empty, report an error on stderr, and exit 1. |
 | `ambient-recorder recording start` | `none` | Continuously capture microphone plus computer playback into a mono Ogg Opus stream and append diagnostics. Request capture permissions; create directories/files and hold an exclusive output-directory lock. |
 | `ambient-recorder service` | `none` | Print service command help. |
 | `ambient-recorder service print` | `none` | Print a launchd plist to stdout. Resolve the executable, loaded config, and output to absolute paths. Installation and process startup are separate shell operations. |
@@ -55,10 +57,11 @@ Use `--help` on any command for help. Domain leaf commands and `skill` accept ze
 
 | Scope | Flag | Short | Type | Parser default | Accepted values and effective behavior |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `all` | `--config` | `none` | `string` | `""` | TOML path; empty selects the XDG default below. An explicitly named file must exist for recording, service print, and service install; config init creates it. Other service operations use the saved plist. Ignored by microphone, help, skill, and completion operations. |
+| `all` | `--config` | `none` | `string` | `""` | TOML path; empty selects the XDG default below. An explicitly named file must exist for recording, config print-dir, service print, and service install; config init creates it. Other service operations use the saved plist. Ignored by microphone, help, skill, and completion operations. |
 | `all` | `--help` | `-h` | `bool` | `false` | Print help and exit. |
 | `ambient-recorder` | `--version` | `-v` | `bool` | `false` | Print only the raw version plus a newline and exit. Development builds print dev; releases embed their version. |
 | `ambient-recorder recording start` | `--output` | `none` | `string` | `""` | Nonempty recording directory; empty parser default inherits output.dir from TOML or the default data directory. |
+| `ambient-recorder recording print-file` | `--output` | `none` | `string` | `""` | Directory to inspect; omitted inherits output.dir from TOML or the default data directory. An explicitly empty value fails validation. |
 | `ambient-recorder recording start` | `--bitrate` | `none` | `int` | `32000` | Target bits/second, 6000..128000 inclusive. |
 | `ambient-recorder recording start` | `--complexity` | `none` | `int` | `2` | Opus computational effort, 0..10 inclusive; higher uses more encoder CPU. |
 | `ambient-recorder recording start` | `--sync-interval` | `none` | `duration` | `5s` | Positive Go duration such as 500ms, 5s, or 1m30s. Approximate interval for synchronizing audio and logs to disk. |
@@ -80,7 +83,7 @@ Use `--help` on any command for help. Domain leaf commands and `skill` accept ze
 - `NO_COLOR`: any nonempty value disables human recording-log colors.
 - `TERM`: dumb disables human recording-log colors. Redirected stderr is plain text.
 - `AMBIENT_RECORDER_SERVICE_SOCKET`: set by generated LaunchAgent plists to a private Unix socket beside the plist. Recording start serves its embedded version there until exit, reserves a retained 0600 lock file, recovers stale sockets, and removes the socket on clean shutdown. Unset or empty leaves foreground recording without a version endpoint. Endpoint startup failures exit 1 before capture.
-- Help, version, config init, microphone list, skill, completion, and service commands return results on stdout. Recording has no normal stdout output. Usage and failures go to stderr.
+- Help, version, config commands, microphone list, recording print-file, skill, completion, and service commands return results on stdout. Recording start has no normal stdout output. Usage and failures go to stderr.
 - Human microphone listings show names, default status, connection/type and available manufacturer/model details, plus stable preference selectors. Connection/type labels use identifiers available in the build SDK; unrecognized types display Unavailable. Agent listings use one flat key/value line per microphone. With no inputs, both print `No microphones available`.
 - Config init prints `Configuration created: <absolute path>` in human mode or `config=<absolute path>` in agent mode.
 - Service actions print a human result and `Service file: <path>`, or `service=<action> plist=<quoted path>` in agent mode. Service status prints `Installed: <bool>`, `Loaded by macOS: <bool>`, `CLI version: <version>`, `Running service version: <version or state>`, and `Service file: <path>` in human mode; agent mode prints `installed=<bool> loaded=<bool> cli_version=<quoted version> service_version=<quoted version or state> plist=<quoted path>`. CLI version belongs to the invoked executable. Running version comes from the live process, independently of upgrades to its executable on disk. An unloaded service reports `not running`; a loaded job whose version query fails reports `unavailable`, including old installations without the endpoint. Queries time out after one second. Loaded status and a version response do not establish audio capture health. The optional native report is displayed verbatim in both modes.
@@ -107,6 +110,8 @@ Order input.microphones from highest to lowest priority. Case-sensitive exact na
 `*` tries the macOS default input first and other eligible inputs in stable UID/ID order. An implicit final `*` retains unlisted inputs; [] also permits all inputs. Put explicit positive preferences before *. If exclusions remove every input, recording retries until an eligible input appears. Device connect/disconnect and selection changes are logged. Higher-priority inputs becoming available trigger automatic switching. An input producing no capture frames for five seconds is deferred for 30 seconds while another eligible input is tried; silence is still recorded. Microphone switching preserves the open file and encoder and can leave a capture gap.
 
 ## Files, recovery and background recording
+
+Use `ambient-recorder config print-dir` to resolve storage from the selected TOML or defaults, with relative paths based on the invocation's working directory. Both path commands honor --config and require an explicitly selected configuration file to exist. Use `ambient-recorder recording print-file` for the open segment in that directory, or add --output to target a recording started with an override or a service pinned to a different directory. Results are snapshots; an open file does not establish that audio frames are currently arriving. The recorder publishes a relative .recording.current symlink after encoder initialization, removes it before finalization, and holds an exclusive lock on the segment until close. Queries reject pointers whose segment is no longer locked, including after a crash. Existing processes from builds without this mechanism must be restarted with the updated executable before their active file can be queried.
 
 Recordings are mono 48 kHz Ogg Opus, mixing microphone and computer playback. Files use local acquisition time: `YYYY/MM/DD/HH-MM-SS.000000000.opus`; diagnostics append to `YYYY/MM/DD/log.nljson`. Rotate at hour boundaries. Restart creates a fresh timestamp path; exclusive reservation protects existing recordings, retrying collisions with the current time. New directories use 0700 and recordings/logs use 0600. The recorder holds a `.recording.lock` file lock beneath the output directory. Retention is unlimited.
 
