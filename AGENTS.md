@@ -67,6 +67,8 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
 - Never publish releases, tags, packages or deployments without explicit user
   authorization. The user has explicitly authorized the public GitHub repository
   and 1.0.0 release; that authorization does not extend to later releases.
+- The user has explicitly requested and authorized the next release, 1.1.0,
+  with verification. This authorization does not extend to subsequent releases.
 - Do not edit, stage, reset or commit another agent's changes. Pause and inspect
   concurrent staging/index locks; halt and report unowned staged files stalled
   over 60 seconds. Do not fix unrelated failures or change scope without consent.
