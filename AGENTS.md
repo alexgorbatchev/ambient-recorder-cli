@@ -48,6 +48,9 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
   or crash durability from a successful build or a finalized sample alone.
 - Background service startup is at GUI login after reboot, as approved by the
   user. Keep native supervision and distinguish a loaded job from working audio.
+- Service status must show the invoked CLI version and the version reported by
+  the live service process. Never infer the running version from the binary on
+  disk; report an unloaded service as not running and missing identity as unavailable.
 
 ## Verification and boundaries
 

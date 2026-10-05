@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/serviceinfo"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/testdir"
 )
 
@@ -55,6 +56,13 @@ func TestUserServiceResolution(t *testing.T) {
 		out, _, err := execute(t, context.Background(), "service", "status", "--config", filepath.Join(dir, "absent.toml"))
 		if err != nil || !strings.Contains(out, a.plist) {
 			t.Fatalf("read-only status must work without recording config: %q %v", out, err)
+		}
+		want := "CLI version: " + version + "\n"
+		if mode == "1" {
+			want = fmt.Sprintf("cli_version=%q", version)
+		}
+		if !strings.Contains(out, want) {
+			t.Fatalf("status must show invoked CLI version: %q", out)
 		}
 	}
 	t.Setenv("HOME", "")
@@ -151,6 +159,9 @@ func TestNativeServiceLifecycle(t *testing.T) {
 		if err != nil || !(strings.Contains(out, "Installed: false") || strings.Contains(out, "installed=false")) {
 			t.Fatalf("uninstalled status: %q %v", out, err)
 		}
+		if !strings.Contains(out, "not running") {
+			t.Fatalf("unloaded service claimed a live version: %q", out)
+		}
 	}
 	if _, err := executeService(t, a, "", "install", "--output", output); err != nil {
 		t.Fatal(err)
@@ -160,7 +171,7 @@ func TestNativeServiceLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Inspect generated values through Apple's parser, including XML escaping.
-	for _, key := range []string{"Label", "ProgramArguments.0", "ProgramArguments.4", "Umask", "KeepAlive", "LimitLoadToSessionType"} {
+	for _, key := range []string{"Label", "ProgramArguments.0", "ProgramArguments.4", "Umask", "KeepAlive", "LimitLoadToSessionType", "EnvironmentVariables.AMBIENT_RECORDER_SERVICE_SOCKET"} {
 		cmd := exec.Command("/usr/bin/plutil", "-extract", key, "raw", "-o", "-", a.plist)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -179,6 +190,10 @@ func TestNativeServiceLifecycle(t *testing.T) {
 		case "ProgramArguments.4":
 			if value != output {
 				t.Fatalf("output path changed: %q", value)
+			}
+		case "EnvironmentVariables.AMBIENT_RECORDER_SERVICE_SOCKET":
+			if value != serviceinfo.Path(a.plist) {
+				t.Fatalf("installed endpoint does not match status query: %q", value)
 			}
 		}
 	}

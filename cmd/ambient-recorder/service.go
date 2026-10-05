@@ -8,6 +8,7 @@ import (
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/config"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/plist"
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/serviceinfo"
 	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
 	"github.com/spf13/cobra"
 )
@@ -83,7 +84,7 @@ func newServiceInstallCommand(configPath *string, connect func() (launchAgent, e
 	return cmd
 }
 
-type agentSettings struct{ binary, output, config, label string }
+type agentSettings struct{ binary, output, config, label, socket string }
 
 func serviceSettings(cmd *cobra.Command, configPath string) (agentSettings, error) {
 	cfg, loaded, err := recordingConfig(cmd, configPath)
@@ -94,7 +95,12 @@ func serviceSettings(cmd *cobra.Command, configPath string) (agentSettings, erro
 	if err != nil {
 		return agentSettings{}, fmt.Errorf("resolve recording directory: %w", err)
 	}
-	return agentSettings{output: path, config: loaded, label: serviceLabel}, nil
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return agentSettings{}, fmt.Errorf("resolve service home directory: %w", err)
+	}
+	plist := filepath.Join(home, "Library", "LaunchAgents", serviceLabel+".plist")
+	return agentSettings{output: path, config: loaded, label: serviceLabel, socket: serviceinfo.Path(plist)}, nil
 }
 
 func recorderExecutable() (string, error) {
@@ -142,6 +148,9 @@ func writeAgent(w io.Writer, settings agentSettings) error {
 		"ThrottleInterval":       5,
 		"Umask":                  0o077,
 		"StandardErrorPath":      filepath.Join(settings.output, "supervisor.stderr.log"),
+	}
+	if settings.socket != "" {
+		fields["EnvironmentVariables"] = map[string]any{serviceinfo.Environment: settings.socket}
 	}
 	data, err := plist.XML(fields)
 	if err != nil {

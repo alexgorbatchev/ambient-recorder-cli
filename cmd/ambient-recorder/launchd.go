@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/serviceinfo"
 )
 
 // launchctl identifies an absent service with 113 (launchctl error 113).
@@ -78,6 +80,7 @@ func (a launchAgent) install(ctx context.Context, settings agentSettings) error 
 	var plist bytes.Buffer
 	settings.label = a.label
 	settings.binary = a.binary
+	settings.socket = serviceinfo.Path(a.plist)
 	if err := writeAgent(&plist, settings); err != nil {
 		return err
 	}
@@ -179,10 +182,19 @@ func (a launchAgent) status(ctx context.Context, w io.Writer, details, agent boo
 	if err != nil {
 		return err
 	}
+	running := "not running"
+	if loaded {
+		running = "unavailable"
+		if v, err := serviceinfo.Version(ctx, serviceinfo.Path(a.plist)); err == nil {
+			running = v
+		} else if ctx.Err() != nil {
+			return ctx.Err()
+		}
+	}
 	if agent {
-		_, err = fmt.Fprintf(w, "installed=%t loaded=%t plist=%q\n", installed, loaded, a.plist)
+		_, err = fmt.Fprintf(w, "installed=%t loaded=%t cli_version=%q service_version=%q plist=%q\n", installed, loaded, version, running, a.plist)
 	} else {
-		_, err = fmt.Fprintf(w, "Installed: %t\nLoaded by macOS: %t\nService file: %s\n", installed, loaded, a.plist)
+		_, err = fmt.Fprintf(w, "Installed: %t\nLoaded by macOS: %t\nCLI version: %s\nRunning service version: %s\nService file: %s\n", installed, loaded, version, running, a.plist)
 	}
 	if err != nil || !details || !loaded {
 		return err

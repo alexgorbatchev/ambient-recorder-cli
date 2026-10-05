@@ -7,6 +7,7 @@ import (
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/config"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/recording"
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/serviceinfo"
 	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
 	"github.com/spf13/cobra"
 )
@@ -40,6 +41,7 @@ func newRootCommand() (*cobra.Command, error) {
 				{Name: "AGENT", Description: "Set to 1, true, or yes for compact command output"},
 				{Name: "NO_COLOR", Description: "Any nonempty value disables colors in recording logs"},
 				{Name: "TERM", Description: "Set to dumb to disable colors in recording logs"},
+				{Name: serviceinfo.Environment, Description: "Unix socket for reporting the live service version; set by service installation"},
 			},
 			Metadata: map[string]string{"output": "mono Ogg Opus", "platform": "macOS 14.2+", "writes": "recordings and diagnostic logs"},
 		},
@@ -61,7 +63,9 @@ func newStartCommand(configPath *string) *cobra.Command {
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return recording.Run(ctx, resolved, cmd.ErrOrStderr())
+			return withServiceVersion(cmd.Root().Version, func() error {
+				return recording.Run(ctx, resolved, cmd.ErrOrStderr())
+			})
 		},
 	}
 	cmd.Flags().String("output", "", "Recording directory (defaults to XDG user data/ambient-recorder)")
