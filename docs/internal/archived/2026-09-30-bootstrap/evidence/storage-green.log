@@ -1,0 +1,34 @@
+=== RUN   TestSegmentRestart
+--- PASS: TestSegmentRestart (0.09s)
+=== RUN   TestSegmentCalendarBoundaries
+=== RUN   TestSegmentCalendarBoundaries/2026/09/30/23-000.opus
+=== RUN   TestSegmentCalendarBoundaries/2026/10/01/00-000.opus
+=== RUN   TestSegmentCalendarBoundaries/2026/10/01/01-000.opus
+--- PASS: TestSegmentCalendarBoundaries (0.07s)
+    --- PASS: TestSegmentCalendarBoundaries/2026/09/30/23-000.opus (0.02s)
+    --- PASS: TestSegmentCalendarBoundaries/2026/10/01/00-000.opus (0.01s)
+    --- PASS: TestSegmentCalendarBoundaries/2026/10/01/01-000.opus (0.01s)
+=== RUN   TestSegmentAllocation
+=== RUN   TestSegmentAllocation/gap
+=== RUN   TestSegmentAllocation/beyond_three_digits
+=== RUN   TestSegmentAllocation/unrelated
+=== RUN   TestSegmentAllocation/reserved_directory
+--- PASS: TestSegmentAllocation (0.18s)
+    --- PASS: TestSegmentAllocation/gap (0.04s)
+    --- PASS: TestSegmentAllocation/beyond_three_digits (0.04s)
+    --- PASS: TestSegmentAllocation/unrelated (0.05s)
+    --- PASS: TestSegmentAllocation/reserved_directory (0.05s)
+=== RUN   TestConcurrentSegments
+--- PASS: TestConcurrentSegments (0.16s)
+=== RUN   TestDailyLogAppend
+--- PASS: TestDailyLogAppend (0.07s)
+=== RUN   TestStorageFailure
+=== RUN   TestStorageFailure/segment
+=== RUN   TestStorageFailure/log
+--- PASS: TestStorageFailure (0.02s)
+    --- PASS: TestStorageFailure/segment (0.00s)
+    --- PASS: TestStorageFailure/log (0.00s)
+=== RUN   TestStorageCannotEscapeRoot
+--- PASS: TestStorageCannotEscapeRoot (0.02s)
+PASS
+ok  	command-line-arguments	1.952s

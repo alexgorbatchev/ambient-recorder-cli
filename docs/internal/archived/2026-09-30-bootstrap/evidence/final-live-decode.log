@@ -1,0 +1,5 @@
+=== RUN   TestRecordedFile
+    encoder_test.go:94: bytes=199599 duration=84.480s EOS=true decoded_frames=4056000 RMS=0.000072 max_880Hz_amplitude=0.000012
+--- PASS: TestRecordedFile (0.30s)
+PASS
+ok  	github.com/alexgorbatchev/ambient-recorder-cli/internal/opus	0.625s

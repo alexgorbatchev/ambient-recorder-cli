@@ -1,0 +1,7 @@
+--- FAIL: TestWatchdog (1.01s)
+    recording_test.go:30: stalled recorder did not exit: <nil>
+        ERR: Recorder blocked for 20ms; exiting for supervisor restart
+        PASS
+FAIL
+FAIL	github.com/alexgorbatchev/ambient-recorder-cli/internal/recording	1.334s
+FAIL

@@ -1,0 +1,10 @@
+--- FAIL: TestRoundTrip (0.07s)
+    --- FAIL: TestRoundTrip/16000 (0.00s)
+        encoder_test.go:41: duration=47040, preskip=312, EOS=false
+    --- FAIL: TestRoundTrip/48000 (0.00s)
+        encoder_test.go:41: duration=47040, preskip=312, EOS=false
+    --- FAIL: TestRoundTrip/44100 (0.01s)
+        encoder_test.go:41: duration=47040, preskip=312, EOS=false
+FAIL
+FAIL	github.com/alexgorbatchev/ambient-recorder-cli/internal/opus	0.392s
+FAIL

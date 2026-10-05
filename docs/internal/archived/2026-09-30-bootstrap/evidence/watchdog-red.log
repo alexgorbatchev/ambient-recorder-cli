@@ -1,0 +1,9 @@
+# github.com/alexgorbatchev/ambient-recorder-cli/internal/recording [github.com/alexgorbatchev/ambient-recorder-cli/internal/recording.test]
+internal/recording/recording_test.go:21:25: too many arguments in call to r.watchdog
+	have (*os.File, time.Duration)
+	want (io.Writer)
+internal/recording/recording_test.go:33:32: too many arguments in call to r.watchdog
+	have (*os.File, time.Duration)
+	want (io.Writer)
+FAIL	github.com/alexgorbatchev/ambient-recorder-cli/internal/recording [build failed]
+FAIL

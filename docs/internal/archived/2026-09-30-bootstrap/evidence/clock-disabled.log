@@ -1,0 +1,5 @@
+--- FAIL: TestClockRecalibration (0.00s)
+    capture_test.go:23: acquisition=2026-09-30 23:59:59.98 +0000 UTC after shift 2h0m0s
+FAIL
+FAIL	github.com/alexgorbatchev/ambient-recorder-cli/internal/capture	0.358s
+FAIL

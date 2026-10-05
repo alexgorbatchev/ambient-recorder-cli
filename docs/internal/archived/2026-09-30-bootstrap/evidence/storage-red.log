@@ -1,0 +1,5 @@
+# command-line-arguments [command-line-arguments.test]
+internal/storage/storage_test.go:219:44: undefined: Store
+internal/storage/storage_test.go:221:12: undefined: Open
+FAIL	command-line-arguments [build failed]
+FAIL

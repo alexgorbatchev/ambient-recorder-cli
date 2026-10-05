@@ -1,0 +1,16 @@
+Record microphone and computer playback locally
+
+Usage:
+  ambient-recorder [flags] [command]
+
+Available Commands:
+├─ recording          Capture microphone and computer playback
+│  ╰─ start           Record continuously until interrupted
+╰─ service            Configure recording in the background
+   ╰─ print           Print a macOS configuration that restarts recording after exit
+
+Flags:
+  -h, --help      help for ambient-recorder
+  -v, --version   version for ambient-recorder
+
+Use "ambient-recorder [command] --help" for more information about a command.

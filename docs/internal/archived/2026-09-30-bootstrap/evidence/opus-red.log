@@ -1,0 +1,9 @@
+# github.com/alexgorbatchev/ambient-recorder-cli/internal/opus [github.com/alexgorbatchev/ambient-recorder-cli/internal/opus.test]
+internal/opus/encoder_test.go:19:14: undefined: New
+internal/opus/encoder_test.go:19:24: undefined: Config
+internal/opus/encoder_test.go:85:15: undefined: New
+internal/opus/encoder_test.go:85:22: undefined: Config
+internal/opus/encoder_test.go:95:12: undefined: New
+internal/opus/encoder_test.go:95:22: undefined: Config
+FAIL	github.com/alexgorbatchev/ambient-recorder-cli/internal/opus [build failed]
+FAIL

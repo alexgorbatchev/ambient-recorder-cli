@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.alexgorbatchev.ambient-recorder</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/REDACTED/REPOSITORY/bin/ambient-recorder</string>
+      <string>recording</string>
+      <string>start</string>
+      <string>--output</string>
+      <string>/REDACTED/REPOSITORY/.tmp/live-recordings</string>
+    </array>
+    <key>KeepAlive</key>
+    <true></true>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+    <key>StandardErrorPath</key>
+    <string>/REDACTED/REPOSITORY/.tmp/live-recordings/supervisor.stderr.log</string>
+  </dict>
+</plist>

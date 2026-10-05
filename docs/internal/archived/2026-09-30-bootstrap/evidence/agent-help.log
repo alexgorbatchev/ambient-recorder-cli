@@ -1,0 +1,16 @@
+command: ambient-recorder recording start
+summary: Record continuously until interrupted
+usage: ambient-recorder recording start [flags]
+env:
+  - XDG_DATA_HOME: Absolute directory for user data; defaults to ~/.local/share
+  - AGENT: Set to 1, true, or yes for compact command output
+metadata:
+  output: mono Ogg Opus
+  platform: macOS 14.2+
+  writes: recordings and diagnostic logs
+flags:
+  --bitrate int: Opus bitrate in bits per second (6000..128000) (default: "32000")
+  --complexity int: Opus complexity (0..10; higher uses more CPU) (default: "2")
+  -h, --help bool: help for start (default: "false")
+  --output string: Recording directory (defaults to XDG user data/ambient-recorder) (default: "")
+  --sync-interval duration: Interval between storage synchronization attempts (default: "5s")

@@ -1,0 +1,13 @@
+sh scripts/build-native.sh
+go vet ./...
+go mod tidy -diff
+test -z "$(gofmt -l cmd internal)"
+mkdir -p .tmp
+TMPDIR="/REDACTED/REPOSITORY/.tmp" go test -race ./...
+ok  	github.com/alexgorbatchev/ambient-recorder-cli/cmd/ambient-recorder	1.763s
+ok  	github.com/alexgorbatchev/ambient-recorder-cli/internal/capture	2.172s
+ok  	github.com/alexgorbatchev/ambient-recorder-cli/internal/opus	2.072s
+ok  	github.com/alexgorbatchev/ambient-recorder-cli/internal/recording	1.580s
+ok  	github.com/alexgorbatchev/ambient-recorder-cli/internal/storage	1.924s
+mkdir -p bin
+go build -ldflags='-extldflags=-Wl,-sectcreate,__TEXT,__info_plist,/REDACTED/REPOSITORY/internal/capture/Info.plist' -o bin/ambient-recorder ./cmd/ambient-recorder

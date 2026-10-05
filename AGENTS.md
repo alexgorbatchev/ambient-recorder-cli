@@ -16,6 +16,8 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
 
 ## Required grounding
 
+- For documentation organization and maintenance, follow
+  [documentation instructions](docs/agents.md).
 - Read all applicable skills in full before writing or modifying code. CLI work
   requires cli-best-practices; Go work requires golang; documentation requires
   docs-writer; commits require git-commit.

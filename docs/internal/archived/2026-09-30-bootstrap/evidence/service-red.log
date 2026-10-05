@@ -1,0 +1,5 @@
+--- FAIL: TestServiceConfiguration (0.00s)
+    root_test.go:35: service configuration: unknown flag: --output
+FAIL
+FAIL	github.com/alexgorbatchev/ambient-recorder-cli/cmd/ambient-recorder	0.495s
+FAIL

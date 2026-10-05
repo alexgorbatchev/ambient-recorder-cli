@@ -1,0 +1,20 @@
+--- FAIL: TestConcurrentSegments (0.02s)
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:138: duplicate path "/REDACTED/SYSTEM-TEMP/TestConcurrentSegments3950704860/001/2026/09/30/09-000.opus"
+    storage_test.go:143: created 1 segments, want 16
+FAIL
+FAIL	command-line-arguments	0.389s
+FAIL

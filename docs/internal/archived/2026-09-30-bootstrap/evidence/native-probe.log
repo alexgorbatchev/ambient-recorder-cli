@@ -1,0 +1,8 @@
+aggregate=170 mic=126 nominal=16000.000000 status=0
+stream=171 rate=16000.000000 ch=1 flags=9 bits=32 bytes=4 status=0
+stream=172 rate=48000.000000 ch=1 flags=9 bits=32 bytes=4 status=0
+register=0
+start=0
+buffer=0 channels=1 bytes=1280 frames=320
+buffer=1 channels=1 bytes=1280 frames=320
+cleanup=0

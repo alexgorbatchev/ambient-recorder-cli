@@ -1,0 +1,4 @@
+# github.com/alexgorbatchev/ambient-recorder-cli/internal/capture [github.com/alexgorbatchev/ambient-recorder-cli/internal/capture.test]
+internal/capture/capture_test.go:16:15: c.reanchor undefined (type *Capture has no field or method reanchor)
+FAIL	github.com/alexgorbatchev/ambient-recorder-cli/internal/capture [build failed]
+FAIL

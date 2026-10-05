@@ -1,0 +1,5 @@
+--- FAIL: TestWatchdog (1.09s)
+    recording_test.go:65: watchdog did not exit with blocked stderr: <nil>
+FAIL
+FAIL	github.com/alexgorbatchev/ambient-recorder-cli/internal/recording	1.417s
+FAIL

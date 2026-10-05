@@ -1,0 +1,5 @@
+--- FAIL: TestAcquisitionHourRotation (0.02s)
+    recording_test.go:67: 2026/09/30/23-000.opus duration=960 samples, want 480
+FAIL
+FAIL	github.com/alexgorbatchev/ambient-recorder-cli/internal/recording	0.477s
+FAIL
