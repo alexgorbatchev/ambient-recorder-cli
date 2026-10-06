@@ -81,6 +81,8 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
   with verification. This authorization does not extend to subsequent releases.
 - The user has subsequently requested the next release, 1.2.0, including native
   verification and publication. This authorization does not extend to later releases.
+- The user has requested publication of the next release, 1.3.0, for service
+  recording-path status. This authorization does not extend to later releases.
 - Do not edit, stage, reset or commit another agent's changes. Pause and inspect
   concurrent staging/index locks; halt and report unowned staged files stalled
   over 60 seconds. Do not fix unrelated failures or change scope without consent.
