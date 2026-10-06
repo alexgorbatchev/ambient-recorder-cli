@@ -55,6 +55,9 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
 - Service status must show the invoked CLI version and the version reported by
   the live service process. Never infer the running version from the binary on
   disk; report an unloaded service as not running and missing identity as unavailable.
+- Service status also shows the recording directory, configuration path and
+  current file. Prefer live process values; label saved service paths when live
+  values are unavailable. Never infer an active service file from another recorder.
 
 ## Verification and boundaries
 

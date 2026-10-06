@@ -11,15 +11,16 @@ import (
 )
 
 type sink struct {
-	store      *storage.Store
-	journal    *journal
-	file       *os.File
-	encoder    *opus.Encoder
-	hour       string
-	frames     uint64
-	rate       int
-	bitrate    int
-	complexity int
+	store              *storage.Store
+	journal            *journal
+	file               *os.File
+	encoder            *opus.Encoder
+	hour               string
+	frames             uint64
+	rate               int
+	bitrate            int
+	complexity         int
+	currentFileChanged func(string)
 }
 
 func (s *sink) write(at time.Time, pcm []float32) error {
@@ -58,6 +59,7 @@ func (s *sink) open(at time.Time, hour string) error {
 		return errors.Join(err, e.Close(), f.Close())
 	}
 	s.file, s.encoder, s.hour, s.frames = f, e, hour, 0
+	s.reportCurrent(f.Name())
 	s.journal.event(slog.LevelInfo, "Recording segment opened", "path", f.Name(), "acquired_at", at, "sample_rate", s.rate, "channels", 1)
 	return nil
 }
@@ -73,8 +75,15 @@ func (s *sink) close() error {
 	if s.encoder == nil {
 		return nil
 	}
+	s.reportCurrent("")
 	err := errors.Join(s.store.ClearCurrent(), s.encoder.Close(), s.file.Sync(), s.file.Close())
 	s.journal.event(slog.LevelInfo, "Recording segment closed", "path", s.file.Name(), "input_frames", s.frames, "error", err)
 	s.encoder, s.file = nil, nil
 	return err
+}
+
+func (s *sink) reportCurrent(path string) {
+	if s.currentFileChanged != nil {
+		s.currentFileChanged(path)
+	}
 }

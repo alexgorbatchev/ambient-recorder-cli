@@ -183,18 +183,25 @@ func (a launchAgent) status(ctx context.Context, w io.Writer, details, agent boo
 		return err
 	}
 	running := "not running"
+	var live serviceinfo.Info
 	if loaded {
 		running = "unavailable"
-		if v, err := serviceinfo.Version(ctx, serviceinfo.Path(a.plist)); err == nil {
-			running = v
+		if info, err := serviceinfo.Query(ctx, serviceinfo.Path(a.plist)); err == nil {
+			live = info
+			running = info.Version
 		} else if ctx.Err() != nil {
 			return ctx.Err()
 		}
 	}
+	paths, err := a.recordingPaths(ctx, installed, loaded, live)
+	if err != nil {
+		return err
+	}
 	if agent {
-		_, err = fmt.Fprintf(w, "installed=%t loaded=%t cli_version=%q service_version=%q plist=%q\n", installed, loaded, version, running, a.plist)
+		_, err = fmt.Fprintf(w, "installed=%t loaded=%t cli_version=%q service_version=%q plist=%q output_dir=%q config_path=%q current_file=%q paths_source=%q\n", installed, loaded, version, running, a.plist, paths.output, paths.config, paths.current, paths.source)
 	} else {
-		_, err = fmt.Fprintf(w, "Installed: %t\nLoaded by macOS: %t\nCLI version: %s\nRunning service version: %s\nService file: %s\n", installed, loaded, version, running, a.plist)
+		source := map[string]string{"live": "live service", "saved": "saved service configuration", "unavailable": "unavailable"}[paths.source]
+		_, err = fmt.Fprintf(w, "Installed: %t\nLoaded by macOS: %t\nCLI version: %s\nRunning service version: %s\nService file: %s\nRecording directory: %s\nConfiguration file: %s\nCurrent recording file: %s\nPaths from: %s\n", installed, loaded, version, running, a.plist, paths.output, paths.config, paths.current, source)
 	}
 	if err != nil || !details || !loaded {
 		return err

@@ -37,6 +37,9 @@ type Config struct {
 	SyncInterval time.Duration
 	Agent        bool
 	Microphones  []string
+	// CurrentFileChanged receives the absolute path on open and empty on close.
+	// Run invokes it synchronously from the recording goroutine.
+	CurrentFileChanged func(string)
 }
 
 type runner struct {
@@ -99,7 +102,7 @@ func Run(ctx context.Context, cfg Config, stderr io.Writer) (err error) {
 		r.monitor = monitor
 		defer func() { err = errors.Join(err, monitor.Close()) }()
 	}
-	r.out = &sink{store: s, journal: j, rate: resample.Rate, bitrate: cfg.Bitrate, complexity: cfg.Complexity}
+	r.out = &sink{store: s, journal: j, rate: resample.Rate, bitrate: cfg.Bitrate, complexity: cfg.Complexity, currentFileChanged: cfg.CurrentFileChanged}
 	defer func() { err = errors.Join(err, r.out.close()) }()
 	j.event(slog.LevelInfo, "Recorder started", "pid", os.Getpid(), "bitrate", cfg.Bitrate, "complexity", cfg.Complexity, "sync_interval", cfg.SyncInterval.String(), "microphone_preferences", cfg.Microphones)
 	retry := initialRetry

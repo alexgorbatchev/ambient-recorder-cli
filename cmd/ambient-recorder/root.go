@@ -41,7 +41,7 @@ func newRootCommand() (*cobra.Command, error) {
 				{Name: "AGENT", Description: "Set to 1, true, or yes for compact command output"},
 				{Name: "NO_COLOR", Description: "Any nonempty value disables colors in recording logs"},
 				{Name: "TERM", Description: "Set to dumb to disable colors in recording logs"},
-				{Name: serviceinfo.Environment, Description: "Unix socket for reporting the live service version; set by service installation"},
+				{Name: serviceinfo.Environment, Description: "Unix socket for reporting live service version and recording paths; set by service installation"},
 			},
 			Metadata: map[string]string{"output": "mono Ogg Opus", "platform": "macOS 14.2+", "writes": "recordings and diagnostic logs"},
 		},
@@ -57,13 +57,13 @@ func newStartCommand(configPath *string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "start", Short: "Record continuously until interrupted", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			resolved, _, err := recordingConfig(cmd, *configPath)
+			resolved, loaded, err := recordingConfig(cmd, *configPath)
 			if err != nil {
 				return err
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return withServiceVersion(cmd.Root().Version, func() error {
+			return withServiceInfo(cmd.Root().Version, loaded, resolved, func(resolved recording.Config) error {
 				return recording.Run(ctx, resolved, cmd.ErrOrStderr())
 			})
 		},

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,9 +29,41 @@ func socketPath(t *testing.T) string {
 	return filepath.Join(rel, "v.sock")
 }
 
+func TestConcurrentRecordingSnapshots(t *testing.T) {
+	path := socketPath(t)
+	info := Info{Version: "1", OutputDir: "/audio & 路径", ConfigPath: "/config.toml"}
+	s, err := Listen(path, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := s.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	var wg sync.WaitGroup
+	for worker := range 4 {
+		wg.Go(func() {
+			for range 30 {
+				if worker == 0 {
+					s.SetCurrentFile(info.OutputDir + "/file.opus")
+				} else if worker == 1 {
+					s.SetCurrentFile("")
+				}
+				got, err := Query(context.Background(), path)
+				if err != nil || got.Version != info.Version || got.OutputDir != info.OutputDir || got.ConfigPath != info.ConfigPath || (got.CurrentFile != "" && got.CurrentFile != info.OutputDir+"/file.opus") {
+					t.Errorf("snapshot=%+v err=%v", got, err)
+					return
+				}
+			}
+		})
+	}
+	wg.Wait()
+}
+
 func TestLiveVersion(t *testing.T) {
 	path := Path(filepath.Join(filepath.Dir(socketPath(t)), "example.plist"))
-	s, err := Listen(path, "1.1.0")
+	s, err := Listen(path, Info{Version: "1.1.0"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,25 +78,25 @@ func TestLiveVersion(t *testing.T) {
 			t.Fatalf("private endpoint: %v %v", info, err)
 		}
 	}
-	if _, err := Listen(path, "2.0.0"); err == nil {
+	if _, err := Listen(path, Info{Version: "2.0.0"}); err == nil {
 		t.Fatal("replaced a live version endpoint")
 	}
 	for range 3 {
-		v, err := Version(context.Background(), path)
-		if err != nil || v != "1.1.0" {
+		v, err := Query(context.Background(), path)
+		if err != nil || v.Version != "1.1.0" {
 			t.Fatalf("live identity: %q %v", v, err)
 		}
 	}
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Version(context.Background(), path); err == nil {
+	if _, err := Query(context.Background(), path); err == nil {
 		t.Fatal("closed endpoint remained available")
 	}
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("socket remains: %v", err)
 	}
-	next, err := Listen(path, "2.0.0")
+	next, err := Listen(path, Info{Version: "2.0.0"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +105,7 @@ func TestLiveVersion(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	if v, err := Version(context.Background(), path); err != nil || v != "2.0.0" {
+	if v, err := Query(context.Background(), path); err != nil || v.Version != "2.0.0" {
 		t.Fatalf("new identity: %q %v", v, err)
 	}
 }
@@ -87,7 +120,7 @@ func TestStaleSocket(t *testing.T) {
 	if err := l.Close(); err != nil {
 		t.Fatal(err)
 	}
-	s, err := Listen(path, "3.0.0")
+	s, err := Listen(path, Info{Version: "3.0.0"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +129,7 @@ func TestStaleSocket(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	if v, err := Version(context.Background(), path); err != nil || v != "3.0.0" {
+	if v, err := Query(context.Background(), path); err != nil || v.Version != "3.0.0" {
 		t.Fatalf("stale socket recovery: %q %v", v, err)
 	}
 }
@@ -113,7 +146,7 @@ func TestListenFailures(t *testing.T) {
 		{"long path", filepath.Join(filepath.Dir(path), strings.Repeat("x", 110)), "1"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := Listen(tt.path, tt.version); err == nil {
+			if _, err := Listen(tt.path, Info{Version: tt.version}); err == nil {
 				t.Fatal("invalid endpoint accepted")
 			}
 		})
@@ -161,17 +194,17 @@ func TestVersionFailures(t *testing.T) {
 				}
 				<-done
 			}()
-			if _, err := Version(context.Background(), path); err == nil {
+			if _, err := Query(context.Background(), path); err == nil {
 				t.Fatal("invalid response accepted")
 			}
 		})
 	}
-	if _, err := Version(nil, socketPath(t)); err == nil {
+	if _, err := Query(nil, socketPath(t)); err == nil {
 		t.Fatal("nil context accepted")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := Version(ctx, socketPath(t)); !errors.Is(err, context.Canceled) {
+	if _, err := Query(ctx, socketPath(t)); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation ignored: %v", err)
 	}
 }

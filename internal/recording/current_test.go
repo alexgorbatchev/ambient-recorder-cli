@@ -28,7 +28,12 @@ func TestSinkCurrentFile(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	out := &sink{store: s, journal: j, rate: 48000, bitrate: 32000, complexity: 2}
+	var reported string
+	var reports []string
+	out := &sink{store: s, journal: j, rate: 48000, bitrate: 32000, complexity: 2, currentFileChanged: func(path string) {
+		reported = path
+		reports = append(reports, path)
+	}}
 	t.Cleanup(func() {
 		if err := out.close(); err != nil {
 			t.Error(err)
@@ -43,6 +48,9 @@ func TestSinkCurrentFile(t *testing.T) {
 		if err != nil || got != out.file.Name() {
 			t.Fatalf("current=%q err=%v want=%q", got, err, out.file.Name())
 		}
+		if reported != got {
+			t.Fatalf("service reports %q; open file is %q", reported, got)
+		}
 		if at == start.Add(time.Second) && filepath.Base(got) != "00-00-00.000000000.opus" {
 			t.Fatalf("rotation left old pointer: %s", got)
 		}
@@ -52,6 +60,9 @@ func TestSinkCurrentFile(t *testing.T) {
 	}
 	if got, err := storage.CurrentFile(root); !errors.Is(err, storage.ErrNoCurrentFile) || got != "" {
 		t.Fatalf("closed segment reported: %q %v", got, err)
+	}
+	if reported != "" || len(reports) != 4 || reports[1] != "" || reports[3] != "" {
+		t.Fatalf("open/rotation/close reports: %q", reports)
 	}
 }
 
@@ -73,7 +84,7 @@ func TestSinkCurrentFilePublicationFailure(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(pointer, "preserve"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	out := &sink{store: s, journal: &journal{store: s}, rate: 48000, bitrate: 32000, complexity: 2}
+	out := &sink{store: s, journal: &journal{store: s}, rate: 48000, bitrate: 32000, complexity: 2, currentFileChanged: func(path string) { t.Fatalf("failed segment reported as current: %q", path) }}
 	if err := out.write(time.Now(), make([]float32, 480)); err == nil {
 		t.Fatal("recording proceeded without publishing its active file")
 	}

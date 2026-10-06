@@ -1,6 +1,6 @@
 ---
 created_on: 2026-09-30 12:30
-last_modified: 2026-10-05 11:47
+last_modified: 2026-10-05 16:11
 status: current
 ---
 
@@ -76,3 +76,5 @@ RECORDER_LIVE_OUTPUT="$PWD/.tmp/live-switch-check" TMPDIR="$PWD/.tmp" go test -v
 `service install` creates and loads a per-user Aqua LaunchAgent, starting at GUI login after reboot. The service uses native `launchctl enable`, `bootstrap`, `kickstart`, `disable`, and `bootout` controls. Restart unloads the job to deliver SIGTERM before loading it again; it avoids forced process killing. `service stop` disables startup across logins, and `service start` re-enables it. `service status --details` displays native diagnostics verbatim rather than parsing an unsupported text format. Generation with `service print` remains read-only. Apple's Foundation serializes property lists; syntax validation alone is insufficient to establish that launchd accepts an XML representation.
 
 Do not automatically install or start a persistent service as part of builds or tests. Service lifecycle tests register unique temporary jobs from retained `.tmp` plists using `/usr/bin/false`, exercise the real launchd controls, then unload them. They skip when no GUI login domain exists and never open audio hardware or save login-startup jobs. Local hardware checks cover foreground arm64 capture and sequential handover between physical microphones in one file. CI tests native binaries without opening hardware. Earlier supported macOS versions, physical unplug/reconnect, permissions under launchd, full disks, sleep/wake and long-running capture need their own live validation. Transcription, VAD and calendar integration remain future work.
+
+Service status reads the live process's version, absolute output directory, loaded configuration path and current-file snapshot through its private socket. Sink open/close transitions update that snapshot under a mutex; status never guesses which file the service owns from filesystem activity. When live paths are unavailable, Apple's `plutil` reads the saved plist and Cobra parses its recording arguments, without loading or validating today's TOML. Status labels those paths as saved and keeps the current file unavailable until a live process reports it. Unloaded jobs expose saved paths but never query a remaining socket. Restart the updated executable for live path reporting; existing version-only processes continue to report their version.

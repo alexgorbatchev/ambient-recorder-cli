@@ -38,7 +38,7 @@ func newServiceCommand(configPath *string, connect func() (launchAgent, error)) 
 		}
 		group.AddCommand(cmd)
 	}
-	status := &cobra.Command{Use: "status", Short: "Show whether background recording is installed and loaded", Args: cobra.NoArgs}
+	status := &cobra.Command{Use: "status", Short: "Show background service state, versions and recording paths", Args: cobra.NoArgs}
 	status.Flags().Bool("details", false, "Include the native macOS service diagnostic report")
 	status.RunE = func(cmd *cobra.Command, args []string) error {
 		a, err := connect()

@@ -1,4 +1,4 @@
-// Package serviceinfo reports the version embedded in a live service process.
+// Package serviceinfo reports identity and recording paths from a live service.
 package serviceinfo
 
 import (
@@ -26,8 +26,12 @@ const (
 	maxIdentitySize = 4096
 )
 
-type identity struct {
-	Version string `json:"version"`
+// Info is a snapshot of the running process, not its executable or config on disk.
+type Info struct {
+	Version     string `json:"version"`
+	OutputDir   string `json:"output_dir"`
+	ConfigPath  string `json:"config_path"`
+	CurrentFile string `json:"current_file"`
 }
 
 // Path keeps the endpoint beside its per-user launchd configuration. A short
@@ -39,6 +43,8 @@ func Path(plist string) string {
 
 // Server owns its listener, goroutine and exclusive endpoint lock.
 type Server struct {
+	mu   sync.RWMutex
+	info Info
 	http *http.Server
 	lock *os.File
 	done chan struct{}
@@ -48,8 +54,8 @@ type Server struct {
 
 // Listen reserves the endpoint before removing a stale socket left by a crash.
 // The socket and retained lock file are readable only by their owner.
-func Listen(path, version string) (*Server, error) {
-	if version == "" {
+func Listen(path string, info Info) (*Server, error) {
+	if info.Version == "" {
 		return nil, errors.New("service version is empty")
 	}
 	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
@@ -63,15 +69,19 @@ func Listen(path, version string) (*Server, error) {
 	if err != nil {
 		return nil, errors.Join(err, lock.Close())
 	}
+	s := &Server{info: info, lock: lock, done: make(chan struct{})}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(identity{Version: version}); err != nil {
+		s.mu.RLock()
+		info := s.info
+		s.mu.RUnlock()
+		if err := json.NewEncoder(w).Encode(info); err != nil {
 			// A disconnected status client must not interrupt recording.
 			return
 		}
 	})
-	s := &Server{http: &http.Server{Handler: mux, ReadHeaderTimeout: timeout, WriteTimeout: timeout, IdleTimeout: timeout}, lock: lock, done: make(chan struct{})}
+	s.http = &http.Server{Handler: mux, ReadHeaderTimeout: timeout, WriteTimeout: timeout, IdleTimeout: timeout}
 	go func() {
 		defer close(s.done)
 		if err := s.http.Serve(l); !errors.Is(err, http.ErrServerClosed) {
@@ -79,6 +89,13 @@ func Listen(path, version string) (*Server, error) {
 		}
 	}()
 	return s, nil
+}
+
+// SetCurrentFile publishes sink transitions; an empty path means no open file.
+func (s *Server) SetCurrentFile(path string) {
+	s.mu.Lock()
+	s.info.CurrentFile = path
+	s.mu.Unlock()
 }
 
 func listen(path string) (*net.UnixListener, error) {
@@ -113,8 +130,8 @@ func (s *Server) Close() error {
 	return s.err
 }
 
-// Version queries the live process, independently of its executable on disk.
-func Version(ctx context.Context, path string) (string, error) {
+// Query queries the live process, independently of files on disk.
+func Query(ctx context.Context, path string) (Info, error) {
 	d := &net.Dialer{Timeout: timeout}
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return d.DialContext(ctx, "unix", path)
@@ -123,19 +140,19 @@ func Version(ctx context.Context, path string) (string, error) {
 	client := &http.Client{Transport: transport, Timeout: timeout}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://service/version", nil)
 	if err != nil {
-		return "", err
+		return Info{}, err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return Info{}, err
 	}
 	defer resp.Body.Close() // Read-only local query; no buffered writes to flush.
-	var id identity
+	var id Info
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxIdentitySize)).Decode(&id); err != nil {
-		return "", err
+		return Info{}, err
 	}
 	if resp.StatusCode != http.StatusOK || id.Version == "" {
-		return "", errors.New("invalid service identity response")
+		return Info{}, errors.New("invalid service identity response")
 	}
-	return id.Version, nil
+	return id, nil
 }
