@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,23 @@ import (
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/storage"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/testdir"
 )
+
+func TestActiveMicrophoneTransitions(t *testing.T) {
+	for _, observed := range []bool{false, true} {
+		var names []string
+		r := &runner{}
+		if observed {
+			r.cfg.MicrophoneChanged = func(name string) { names = append(names, name) }
+		}
+		want := []string{"USB Headset", "", "Built-in Microphone", ""}
+		for _, name := range want {
+			r.reportMicrophone(name)
+		}
+		if observed && !reflect.DeepEqual(names, want) {
+			t.Fatalf("capture switches retained a stale microphone: %v", names)
+		}
+	}
+}
 
 func TestMicrophoneConnectionJournal(t *testing.T) {
 	s, err := storage.Open(testdir.New(t))

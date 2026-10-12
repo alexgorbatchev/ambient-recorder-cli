@@ -16,6 +16,7 @@ import (
 )
 
 func TestServiceStatusPaths(t *testing.T) {
+	t.Setenv("HOME", "/nonexistent/home")
 	a := temporaryLaunchAgent(t)
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -53,16 +54,19 @@ func TestServiceStatusPaths(t *testing.T) {
 				wantCurrent = "none"
 			}
 			for label, value := range map[string]string{"Recording directory": live.OutputDir, "Configuration file": live.ConfigPath, "Current recording file": wantCurrent, "Paths from": "live service"} {
-				want := label + ": " + value + "\n"
-				if mode == "1" {
+				if mode == "0" {
+					if got := humanStatusValue(t, out, label); got != value {
+						t.Errorf("status row %q = %q, want %q", label, got, value)
+					}
+				} else {
 					key := map[string]string{"Recording directory": "output_dir", "Configuration file": "config_path", "Current recording file": "current_file", "Paths from": "paths_source"}[label]
 					if key == "paths_source" {
 						value = "live"
 					}
-					want = fmt.Sprintf("%s=%q", key, value)
-				}
-				if !strings.Contains(out, want) {
-					t.Errorf("missing %q in %q", want, out)
+					want := fmt.Sprintf("%s=%q", key, value)
+					if !strings.Contains(out, want) {
+						t.Errorf("missing %q in %q", want, out)
+					}
 				}
 			}
 			if strings.Contains(out, saved.output) {

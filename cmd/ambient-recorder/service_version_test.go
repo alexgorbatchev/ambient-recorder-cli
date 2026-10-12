@@ -28,7 +28,7 @@ func TestRecordingVersionLifetime(t *testing.T) {
 	err = withServiceInfo("running-old-version", "", recording.Config{}, func(recording.Config) error {
 		v, err := serviceinfo.Query(context.Background(), path)
 		if err != nil || v.Version != "running-old-version" {
-			t.Fatalf("live version: %q %v", v, err)
+			t.Fatalf("live version: %+v %v", v, err)
 		}
 		return os.ErrPermission
 	})

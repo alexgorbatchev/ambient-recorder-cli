@@ -2,12 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"os/exec"
 	"path/filepath"
-	"time"
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/serviceinfo"
 )
@@ -45,14 +41,8 @@ func (a launchAgent) recordingPaths(ctx context.Context, installed, loaded bool,
 // Read the saved arguments with Apple's plist parser and the same Cobra command
 // tree used at startup. Never load today's TOML to infer a live process's paths.
 func (a launchAgent) savedRecordingPaths(ctx context.Context) (string, string, error) {
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-	data, err := exec.CommandContext(ctx, "/usr/bin/plutil", "-convert", "json", "-o", "-", "--", a.plist).Output()
-	if err != nil {
-		return "", "", fmt.Errorf("read saved service paths: %w", err)
-	}
 	var saved struct{ ProgramArguments []string }
-	if err := json.Unmarshal(data, &saved); err != nil {
+	if err := a.readPlist(ctx, &saved); err != nil {
 		return "", "", err
 	}
 	if len(saved.ProgramArguments) == 0 {

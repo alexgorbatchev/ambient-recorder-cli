@@ -8,6 +8,7 @@ The executable includes the following components. Preserve this file and the lin
 | Bundled Speex resampler | libopusenc 0.3 | [BSD](docs/licenses/speex-resampler.txt) |
 | cobra-help-tree/v2 | 2.1.0 | [MIT](docs/licenses/cobra-help-tree-2.1.0.txt) |
 | Cobra | 1.10.2 | [Apache 2.0](docs/licenses/cobra-1.10.2.txt) |
+| go-pretty/v6 | 6.8.3 | [MIT](docs/licenses/go-pretty-6.8.3.txt) |
 | go-toml/v2 | 2.4.3 | [MIT](docs/licenses/go-toml-2.4.3.txt) |
 | tint | 1.2.0 | [MIT](docs/licenses/tint-1.2.0.txt) |
 | pflag | 1.0.9 | [BSD](docs/licenses/pflag-1.0.9.txt) |
@@ -15,6 +16,7 @@ The executable includes the following components. Preserve this file and the lin
 | uax29/v2 | 2.2.0 | [MIT](docs/licenses/uax29-2.2.0.txt) |
 | golang.org/x/sys | 0.47.0 | [BSD](docs/licenses/x-sys-0.47.0.txt) |
 | golang.org/x/term | 0.45.0 | [BSD](docs/licenses/x-term-0.45.0.txt) |
+| golang.org/x/text | 0.22.0 | [BSD](docs/licenses/x-text-0.22.0.txt) |
 
 Additional libopusenc source notices cover its [Ogg packer](docs/licenses/opusenc-ogg-packer.txt), [header](docs/licenses/opusenc-header.txt), [picture](docs/licenses/opusenc-picture.txt), and [Unicode support](docs/licenses/opusenc-unicode.txt).
 

@@ -19,12 +19,13 @@ func withServiceInfo(version, configPath string, cfg recording.Config, run func(
 	if err != nil {
 		return fmt.Errorf("resolve service recording directory: %w", err)
 	}
-	s, err := serviceinfo.Listen(path, serviceinfo.Info{Version: version, OutputDir: output, ConfigPath: configPath})
+	s, err := serviceinfo.Listen(path, serviceinfo.Info{Version: version, OutputDir: output, ConfigPath: configPath, Microphone: new("")})
 	if err != nil {
 		return err
 	}
 	defer func() { err = errors.Join(err, s.Close()) }()
 	cfg.Output = output
 	cfg.CurrentFileChanged = s.SetCurrentFile
+	cfg.MicrophoneChanged = s.SetMicrophone
 	return run(cfg)
 }

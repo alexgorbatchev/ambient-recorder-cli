@@ -31,7 +31,7 @@ func socketPath(t *testing.T) string {
 
 func TestConcurrentRecordingSnapshots(t *testing.T) {
 	path := socketPath(t)
-	info := Info{Version: "1", OutputDir: "/audio & 路径", ConfigPath: "/config.toml"}
+	info := Info{Version: "1", OutputDir: "/audio & 路径", ConfigPath: "/config.toml", Microphone: new("")}
 	s, err := Listen(path, info)
 	if err != nil {
 		t.Fatal(err)
@@ -42,16 +42,20 @@ func TestConcurrentRecordingSnapshots(t *testing.T) {
 		}
 	})
 	var wg sync.WaitGroup
-	for worker := range 4 {
+	for worker := range 6 {
 		wg.Go(func() {
 			for range 30 {
 				if worker == 0 {
 					s.SetCurrentFile(info.OutputDir + "/file.opus")
 				} else if worker == 1 {
 					s.SetCurrentFile("")
+				} else if worker == 2 {
+					s.SetMicrophone("USB Headset")
+				} else if worker == 3 {
+					s.SetMicrophone("")
 				}
 				got, err := Query(context.Background(), path)
-				if err != nil || got.Version != info.Version || got.OutputDir != info.OutputDir || got.ConfigPath != info.ConfigPath || (got.CurrentFile != "" && got.CurrentFile != info.OutputDir+"/file.opus") {
+				if err != nil || got.Version != info.Version || got.OutputDir != info.OutputDir || got.ConfigPath != info.ConfigPath || (got.CurrentFile != "" && got.CurrentFile != info.OutputDir+"/file.opus") || got.Microphone == nil || (*got.Microphone != "" && *got.Microphone != "USB Headset") {
 					t.Errorf("snapshot=%+v err=%v", got, err)
 					return
 				}
@@ -84,7 +88,7 @@ func TestLiveVersion(t *testing.T) {
 	for range 3 {
 		v, err := Query(context.Background(), path)
 		if err != nil || v.Version != "1.1.0" {
-			t.Fatalf("live identity: %q %v", v, err)
+			t.Fatalf("live identity: %+v %v", v, err)
 		}
 	}
 	if err := s.Close(); err != nil {
@@ -106,7 +110,7 @@ func TestLiveVersion(t *testing.T) {
 		}
 	})
 	if v, err := Query(context.Background(), path); err != nil || v.Version != "2.0.0" {
-		t.Fatalf("new identity: %q %v", v, err)
+		t.Fatalf("new identity: %+v %v", v, err)
 	}
 }
 
@@ -130,7 +134,7 @@ func TestStaleSocket(t *testing.T) {
 		}
 	})
 	if v, err := Query(context.Background(), path); err != nil || v.Version != "3.0.0" {
-		t.Fatalf("stale socket recovery: %q %v", v, err)
+		t.Fatalf("stale socket recovery: %+v %v", v, err)
 	}
 }
 

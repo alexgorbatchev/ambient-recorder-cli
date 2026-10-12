@@ -40,6 +40,8 @@ type Config struct {
 	// CurrentFileChanged receives the absolute path on open and empty on close.
 	// Run invokes it synchronously from the recording goroutine.
 	CurrentFileChanged func(string)
+	// MicrophoneChanged receives the active input name, or empty between sessions.
+	MicrophoneChanged func(string)
 }
 
 type runner struct {
@@ -136,6 +138,7 @@ func (r *runner) session(ctx context.Context) (err error) {
 		return err
 	}
 	r.aggregateID = c.AggregateID()
+	defer r.reportMicrophone("")
 	r.pulse()
 	r.logCapture(c)
 	source, err := r.newSource(c.Rate)
@@ -165,7 +168,18 @@ func (r *runner) session(ctx context.Context) (err error) {
 	return r.consume(ctx, c, source, pcm)
 }
 
+func (r *runner) reportMicrophone(name string) {
+	if r.cfg.MicrophoneChanged != nil {
+		r.cfg.MicrophoneChanged(name)
+	}
+}
+
 func (r *runner) logCapture(c *capture.Capture) {
+	name := c.Mic.Name
+	if name == "" {
+		name = "unavailable"
+	}
+	r.reportMicrophone(name)
 	fields := append(microphoneFields(c.Mic), "sample_rate", c.Rate, "playback", "system", "output_directory", r.cfg.Output)
 	r.journal.event(slog.LevelInfo, "Capture device opened", fields...)
 }

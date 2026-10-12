@@ -54,14 +54,14 @@ func TestUserServiceResolution(t *testing.T) {
 	for _, mode := range []string{"0", "1"} {
 		t.Setenv("AGENT", mode)
 		out, _, err := execute(t, context.Background(), "service", "status", "--config", filepath.Join(dir, "absent.toml"))
-		if err != nil || !strings.Contains(out, a.plist) {
+		wantPath := a.plist
+		if mode == "0" {
+			wantPath = "~/Library/LaunchAgents/" + serviceLabel + ".plist"
+		}
+		if err != nil || !strings.Contains(out, wantPath) {
 			t.Fatalf("read-only status must work without recording config: %q %v", out, err)
 		}
-		want := "CLI version: " + version + "\n"
-		if mode == "1" {
-			want = fmt.Sprintf("cli_version=%q", version)
-		}
-		if !strings.Contains(out, want) {
+		if mode == "0" && humanStatusValue(t, out, "CLI version") != version || mode == "1" && !strings.Contains(out, fmt.Sprintf("cli_version=%q", version)) {
 			t.Fatalf("status must show invoked CLI version: %q", out)
 		}
 	}
@@ -156,7 +156,10 @@ func TestNativeServiceLifecycle(t *testing.T) {
 	for _, mode := range []string{"0", "1"} {
 		t.Setenv("AGENT", mode)
 		out, err := executeService(t, a, "", "status")
-		if err != nil || !(strings.Contains(out, "Installed: false") || strings.Contains(out, "installed=false")) {
+		if err != nil {
+			t.Fatalf("uninstalled status: %q %v", out, err)
+		}
+		if mode == "0" && humanStatusValue(t, out, "Installed") != "false" || mode == "1" && !strings.Contains(out, "installed=false") {
 			t.Fatalf("uninstalled status: %q %v", out, err)
 		}
 		if !strings.Contains(out, "not running") {
@@ -285,9 +288,9 @@ func TestServiceFailures(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(a.plist, "keep"), []byte("preserved"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	// /usr/bin/true succeeds without changing launchd; this isolates filesystem
-	// removal failure while the lifecycle itself is tested against real launchd.
-	a.control = "/usr/bin/true"
+	// A unique absent launchd job isolates the filesystem removal failure.
+	transient := temporaryLaunchAgent(t)
+	a.control, a.domain, a.target, a.label = transient.control, transient.domain, transient.target, transient.label
 	if err := a.manage(ctx, "uninstall"); err == nil || !strings.Contains(err.Error(), "remove service file") {
 		t.Fatalf("uninstall hid removal failure: %v", err)
 	}

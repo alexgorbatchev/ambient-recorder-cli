@@ -23,9 +23,18 @@ func TestStartupCaptureLog(t *testing.T) {
 	for _, agent := range []bool{false, true} {
 		for _, name := range []string{"USB Microphone – Desk", ""} {
 			var output bytes.Buffer
+			var active string
 			path := filepath.Join(testdir.New(t), "meeting audio")
 			r := &runner{cfg: Config{Output: path}, journal: testJournal(t, &output, agent)}
+			r.cfg.MicrophoneChanged = func(name string) { active = name }
 			r.logCapture(&capture.Capture{Rate: 16000, Mic: capture.Device{ID: 126, Name: name, Transport: "Bluetooth", Type: "Headset microphone", Manufacturer: "Example Audio", Model: "Desk headset"}})
+			wantActive := name
+			if wantActive == "" {
+				wantActive = "unavailable"
+			}
+			if active != wantActive {
+				t.Fatalf("capture reported %q instead of its opened input %q", active, wantActive)
+			}
 			got := output.String()
 			if name != "" && !agent {
 				t.Logf("human capture log:\n%s", got)

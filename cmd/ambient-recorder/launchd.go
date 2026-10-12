@@ -13,10 +13,12 @@ import (
 	"time"
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/serviceinfo"
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 // launchctl identifies an absent service with 113 (launchctl error 113).
 const launchctlServiceAbsent = 113
+const launchctlTimeout = 2 * time.Minute
 
 type launchAgent struct{ plist, domain, target, control, label, binary string }
 
@@ -42,7 +44,7 @@ func userLaunchAgent() (launchAgent, error) {
 }
 
 func (a launchAgent) run(ctx context.Context, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, launchctlTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, a.control, args...)
 	cmd.WaitDelay = time.Second
@@ -100,19 +102,28 @@ func (a launchAgent) install(ctx context.Context, settings agentSettings) error 
 	if err := errors.Join(writeErr, f.Sync(), f.Close()); err != nil {
 		return errors.Join(fmt.Errorf("write service file: %w", err), os.Remove(a.plist))
 	}
-	if err := a.start(ctx); err != nil {
+	if err := a.start(ctx, false); err != nil {
 		return fmt.Errorf("service file saved at %s; correct the error and retry service start: %w", a.plist, err)
 	}
 	return nil
 }
 
-func (a launchAgent) start(ctx context.Context) error {
+func (a launchAgent) start(ctx context.Context, restart bool) error {
 	installed, err := a.installed()
 	if err != nil {
 		return err
 	}
 	if !installed {
 		return errors.New("service is not installed; run service install first")
+	}
+	changed, err := a.refresh(ctx)
+	if err != nil {
+		return err
+	}
+	if changed || restart {
+		if err := a.unload(ctx); err != nil {
+			return err
+		}
 	}
 	if _, err := a.run(ctx, "enable", a.target); err != nil {
 		return err
@@ -130,31 +141,38 @@ func (a launchAgent) start(ctx context.Context) error {
 }
 
 func (a launchAgent) unload(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, launchctlTimeout)
+	defer cancel()
 	_, loaded, err := a.loaded(ctx)
 	if err != nil || !loaded {
 		return err
 	}
 	// Removing the job sends SIGTERM; kickstart -k would kill the recording.
-	_, err = a.run(ctx, "bootout", a.target)
-	return err
+	if _, err := a.run(ctx, "bootout", a.target); err != nil {
+		return err
+	}
+	// bootout returns before SIGTERM cleanup removes the job. Starting while it
+	// remains registered can kickstart the departing process instead of reloading.
+	const pollInterval = 50 * time.Millisecond
+	tick := time.NewTicker(pollInterval)
+	defer tick.Stop()
+	for {
+		_, loaded, err := a.loaded(ctx)
+		if err != nil || !loaded {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("wait for service shutdown: %w", ctx.Err())
+		case <-tick.C:
+		}
+	}
 }
 
 func (a launchAgent) manage(ctx context.Context, action string) error {
 	switch action {
-	case "start":
-		return a.start(ctx)
-	case "restart":
-		installed, err := a.installed()
-		if err != nil {
-			return err
-		}
-		if !installed {
-			return errors.New("service is not installed; run service install first")
-		}
-		if err := a.unload(ctx); err != nil {
-			return err
-		}
-		return a.start(ctx)
+	case "start", "restart":
+		return a.start(ctx, action == "restart")
 	case "stop", "uninstall":
 		if _, err := a.run(ctx, "disable", a.target); err != nil {
 			return err
@@ -183,12 +201,20 @@ func (a launchAgent) status(ctx context.Context, w io.Writer, details, agent boo
 		return err
 	}
 	running := "not running"
+	mic := "not running"
 	var live serviceinfo.Info
 	if loaded {
 		running = "unavailable"
+		mic = "unavailable"
 		if info, err := serviceinfo.Query(ctx, serviceinfo.Path(a.plist)); err == nil {
 			live = info
 			running = info.Version
+			if info.Microphone != nil {
+				mic = *info.Microphone
+				if mic == "" {
+					mic = "none"
+				}
+			}
 		} else if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -198,10 +224,22 @@ func (a launchAgent) status(ctx context.Context, w io.Writer, details, agent boo
 		return err
 	}
 	if agent {
-		_, err = fmt.Fprintf(w, "installed=%t loaded=%t cli_version=%q service_version=%q plist=%q output_dir=%q config_path=%q current_file=%q paths_source=%q\n", installed, loaded, version, running, a.plist, paths.output, paths.config, paths.current, paths.source)
+		_, err = fmt.Fprintf(w, "installed=%t loaded=%t cli_version=%q service_version=%q plist=%q output_dir=%q config_path=%q current_file=%q paths_source=%q microphone=%q\n", installed, loaded, version, running, a.plist, paths.output, paths.config, paths.current, paths.source, mic)
 	} else {
 		source := map[string]string{"live": "live service", "saved": "saved service configuration", "unavailable": "unavailable"}[paths.source]
-		_, err = fmt.Fprintf(w, "Installed: %t\nLoaded by macOS: %t\nCLI version: %s\nRunning service version: %s\nService file: %s\nRecording directory: %s\nConfiguration file: %s\nCurrent recording file: %s\nPaths from: %s\n", installed, loaded, version, running, a.plist, paths.output, paths.config, paths.current, source)
+		rows := []table.Row{
+			{"Installed", installed},
+			{"Loaded by macOS", loaded},
+			{"CLI version", version},
+			{"Running service version", running},
+			{"Service file", shortenHomePath(a.plist)},
+			{"Recording directory", shortenHomePath(paths.output)},
+			{"Configuration file", shortenHomePath(paths.config)},
+			{"Current recording file", shortenHomePath(paths.current)},
+			{"Current microphone", mic},
+			{"Paths from", source},
+		}
+		err = writeStatusTable(w, rows)
 	}
 	if err != nil || !details || !loaded {
 		return err

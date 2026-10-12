@@ -28,10 +28,11 @@ const (
 
 // Info is a snapshot of the running process, not its executable or config on disk.
 type Info struct {
-	Version     string `json:"version"`
-	OutputDir   string `json:"output_dir"`
-	ConfigPath  string `json:"config_path"`
-	CurrentFile string `json:"current_file"`
+	Version     string  `json:"version"`
+	OutputDir   string  `json:"output_dir"`
+	ConfigPath  string  `json:"config_path"`
+	CurrentFile string  `json:"current_file"`
+	Microphone  *string `json:"microphone,omitempty"`
 }
 
 // Path keeps the endpoint beside its per-user launchd configuration. A short
@@ -95,6 +96,13 @@ func Listen(path string, info Info) (*Server, error) {
 func (s *Server) SetCurrentFile(path string) {
 	s.mu.Lock()
 	s.info.CurrentFile = path
+	s.mu.Unlock()
+}
+
+// SetMicrophone publishes the active input; an empty name means no open capture.
+func (s *Server) SetMicrophone(name string) {
+	s.mu.Lock()
+	s.info.Microphone = &name
 	s.mu.Unlock()
 }
 
