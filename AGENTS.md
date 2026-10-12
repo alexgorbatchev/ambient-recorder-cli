@@ -32,10 +32,13 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
 
 ## CLI and recording contracts
 
-- Keep the approved path commands named `config print-dir` and `recording
-  print-file`. Print only an absolute path plus a newline in both output modes;
-  no open recording file means empty stdout and a nonzero exit. Current-file
-  inspection must reject stale state after recorder exit.
+- Keep the path commands named `config print-file`, `recording print-dir` and
+  `recording print-file`. Print only an absolute path plus a newline in both
+  output modes. `config print-file` reports the selected configuration file only
+  if it exists, without parsing its contents; a missing file means empty stdout
+  and a nonzero exit. `recording print-dir` reports the configured/default
+  recording directory. No open recording file means empty stdout and a nonzero
+  exit. Current-file inspection must reject stale state after recorder exit.
 - Maintain the embedded [usage reference](cmd/ambient-recorder/SKILL.md) in the
   same change as any command, argument, flag, default, environment, output or
   side-effect change. Update `last_modified`; verify against the implementation
@@ -75,19 +78,13 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
   checkout v7, setup-go v7, upload-artifact v7, download-artifact v8, and just
   1.58.0. No extra runtime dependencies are authorized by release work.
 - Never publish releases, tags, packages or deployments without explicit user
-  authorization. The user has explicitly authorized the public GitHub repository
-  and 1.0.0 release; that authorization does not extend to later releases.
-- The user has explicitly requested and authorized the next release, 1.1.0,
-  with verification. This authorization does not extend to subsequent releases.
-- The user has subsequently requested the next release, 1.2.0, including native
-  verification and publication. This authorization does not extend to later releases.
-- The user has requested publication of the next release, 1.3.0, for service
-  recording-path status. This authorization does not extend to later releases.
+  authorization. Authorization applies only to the requested release.
 - Do not edit, stage, reset or commit another agent's changes. Pause and inspect
   concurrent staging/index locks; halt and report unowned staged files stalled
   over 60 seconds. Do not fix unrelated failures or change scope without consent.
-- Automatically record new user instructions here or in the appropriate nested
-  AGENTS.md. Ask before resolving conflicts with existing instructions.
+- Keep AGENTS.md focused on standing instructions. Do not record one-off tasks,
+  release authorizations, progress or history. Ask before resolving conflicts
+  between standing instructions.
 - Report observed bugs, contract gaps or unverified limitations under
   `# DUE DILIGENCE`. Honor the user's stop-and-report directive for forbidden
   solution instructions.

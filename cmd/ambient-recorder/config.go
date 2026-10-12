@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -16,17 +17,9 @@ func newConfigInitCommand(configPath *string) *cobra.Command {
 	return &cobra.Command{
 		Use: "init", Short: "Create a default TOML configuration without replacing an existing file", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path := *configPath
-			if path == "" {
-				var err error
-				path, err = config.DefaultPath()
-				if err != nil {
-					return err
-				}
-			}
-			path, err := filepath.Abs(path)
+			path, err := configurationPath(*configPath)
 			if err != nil {
-				return fmt.Errorf("resolve configuration path: %w", err)
+				return err
 			}
 			if err := config.Create(path); err != nil {
 				return err
@@ -39,6 +32,43 @@ func newConfigInitCommand(configPath *string) *cobra.Command {
 			return err
 		},
 	}
+}
+
+func newConfigPrintFileCommand(configPath *string) *cobra.Command {
+	return &cobra.Command{
+		Use: "print-file", Short: "Print the absolute path of the existing configuration file", Args: cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path, err := configurationPath(*configPath)
+			if err != nil {
+				return err
+			}
+			info, err := os.Stat(path)
+			if err != nil {
+				return fmt.Errorf("inspect configuration %q: %w", path, err)
+			}
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("configuration %q is not a regular file", path)
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), path)
+			return err
+		},
+	}
+}
+
+func configurationPath(path string) (string, error) {
+	if path == "" {
+		var err error
+		path, err = config.DefaultPath()
+		if err != nil {
+			return "", err
+		}
+	}
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve configuration path: %w", err)
+	}
+	return path, nil
 }
 
 func recordingConfig(cmd *cobra.Command, path string) (recording.Config, string, error) {

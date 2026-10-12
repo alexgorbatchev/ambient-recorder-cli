@@ -22,6 +22,10 @@ func TestHelpAndVersion(t *testing.T) {
 			if err != nil || diagnostic != "" || !strings.Contains(out, "start") {
 				t.Fatalf("recording help out=%q stderr=%q err=%v", out, diagnostic, err)
 			}
+			out, diagnostic, err = execute(t, context.Background(), "config")
+			if err != nil || diagnostic != "" || !strings.Contains(out, "print-file") || strings.Contains(out, "print-dir") {
+				t.Fatalf("config help out=%q stderr=%q err=%v", out, diagnostic, err)
+			}
 			out, diagnostic, err = execute(t, context.Background(), "--version")
 			if err != nil || diagnostic != "" || out != version+"\n" {
 				t.Fatalf("version out=%q stderr=%q err=%v", out, diagnostic, err)

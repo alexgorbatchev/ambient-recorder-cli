@@ -37,13 +37,13 @@
 
 Download the prebuilt binary for your Mac from [GitHub Releases](https://github.com/alexgorbatchev/ambient-recorder-cli/releases). Use `arm64` for Apple Silicon or `amd64` for Intel. Each archive includes the executable, configuration example, embedded usage reference and component licenses.
 
-For Apple Silicon, download version 1.0.0, verify its checksum and put the executable on your PATH:
+For Apple Silicon, download version 1.4.0, verify its checksum and put the executable on your PATH:
 
 ```sh
-curl --fail --location --remote-name https://github.com/alexgorbatchev/ambient-recorder-cli/releases/download/v1.0.0/ambient-recorder_1.0.0_darwin_arm64.tar.gz
-curl --fail --location --remote-name https://github.com/alexgorbatchev/ambient-recorder-cli/releases/download/v1.0.0/checksums.txt
-awk '$2 == "ambient-recorder_1.0.0_darwin_arm64.tar.gz"' checksums.txt | shasum -a 256 -c -
-tar -xzf ambient-recorder_1.0.0_darwin_arm64.tar.gz
+curl --fail --location --remote-name https://github.com/alexgorbatchev/ambient-recorder-cli/releases/download/v1.4.0/ambient-recorder_1.4.0_darwin_arm64.tar.gz
+curl --fail --location --remote-name https://github.com/alexgorbatchev/ambient-recorder-cli/releases/download/v1.4.0/checksums.txt
+awk '$2 == "ambient-recorder_1.4.0_darwin_arm64.tar.gz"' checksums.txt | shasum -a 256 -c -
+tar -xzf ambient-recorder_1.4.0_darwin_arm64.tar.gz
 mkdir -p "$HOME/.local/bin"
 install -m 755 ambient-recorder "$HOME/.local/bin/ambient-recorder"
 ```
@@ -128,6 +128,8 @@ AGENT=1 ambient-recorder skill
 ambient-recorder --config "$HOME/recorder.toml" config init
 ambient-recorder --config "$HOME/recorder.toml" recording start
 ```
+
+Use `ambient-recorder config print-file` to print the absolute path of the selected configuration file, or the default file when `--config` is omitted. It checks existence without parsing TOML; a missing file leaves stdout empty and exits 1. Use `ambient-recorder recording print-dir` to print the configured/default recording directory, and `ambient-recorder recording print-file` to print the currently open recording file. These commands print only the path and a newline in both output modes.
 
 Edit the generated TOML file to set preferences:
 

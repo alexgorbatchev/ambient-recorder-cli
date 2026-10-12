@@ -1,7 +1,7 @@
 ## Summary
 
-- `service status` now shows the recording directory, configuration path and current recording file in human and agent output. Live paths come from the running service and remain accurate across file rotation and configuration edits on disk.
-- When live paths are unavailable, status shows the saved service paths and labels their source. A stopped service reports its current file as `not running`; a responding recorder with no open file reports `none`.
-- Restart the service with the updated executable to enable live path reporting. Older LaunchAgent plists without the status socket setting need regeneration through `service uninstall` followed by `service install`. Until then, the current file is reported as `unavailable`; status does not guess from another recorder's files. An open file does not establish audio capture health.
+- `config print-file` prints the absolute path of the selected configuration file, using `--config` or the XDG default. A missing file leaves stdout empty and exits 1. The command checks existence without parsing TOML or creating files.
+- The recording-directory command moves from `config print-dir` to `recording print-dir`. Update scripts that use the old command; `config print-dir` is removed and returns an error.
+- All path commands print only an absolute path and a newline in human and agent modes. `recording print-file` continues to report the currently open recording file.
 
 Executables are ad-hoc signed; they are not Developer ID signed or notarized. Transcription, VAD, and calendar integration are not included.
