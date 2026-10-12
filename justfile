@@ -18,13 +18,20 @@ native:
 
 build: native
     mkdir -p bin
-    go build -work -trimpath -ldflags={{quote(link_flags)}} -o bin/ambient-recorder ./cmd/ambient-recorder
+    go build -work -trimpath -ldflags={{ quote(link_flags) }} -o bin/ambient-recorder ./cmd/ambient-recorder
 
 run *args: build
-    bin/ambient-recorder {{args}}
+    bin/ambient-recorder {{ args }}
 
 run-ai *args: build
-    AGENT=1 bin/ambient-recorder {{args}}
+    AGENT=1 bin/ambient-recorder {{ args }}
+
+# Build, sign, and replace the ambient-recorder payload used by the dotfiles shim.
+dev-bootstrap $dotfiles_dir=(env("HOME") / ".dotfiles"):
+    revision="$(git rev-parse --short HEAD)" && just --set version "999.0.0-dev.$revision" build
+    codesign --force --sign - bin/ambient-recorder
+    codesign --verify --strict bin/ambient-recorder
+    bun run scripts/devBootstrap.ts
 
 test: native
     mkdir -p .tmp
