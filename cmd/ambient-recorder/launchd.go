@@ -226,18 +226,21 @@ func (a launchAgent) status(ctx context.Context, w io.Writer, details, agent boo
 	if agent {
 		_, err = fmt.Fprintf(w, "installed=%t loaded=%t cli_version=%q service_version=%q plist=%q output_dir=%q config_path=%q current_file=%q paths_source=%q microphone=%q\n", installed, loaded, version, running, a.plist, paths.output, paths.config, paths.current, paths.source, mic)
 	} else {
-		source := map[string]string{"live": "live service", "saved": "saved service configuration", "unavailable": "unavailable"}[paths.source]
+		outputLabel, configLabel := "Recording directory", "Configuration file"
+		if paths.source == "saved" {
+			outputLabel += " (saved)"
+			configLabel += " (saved)"
+		}
 		rows := []table.Row{
 			{"Installed", installed},
 			{"Loaded by macOS", loaded},
 			{"CLI version", version},
 			{"Running service version", running},
 			{"Service file", shortenHomePath(a.plist)},
-			{"Recording directory", shortenHomePath(paths.output)},
-			{"Configuration file", shortenHomePath(paths.config)},
+			{outputLabel, shortenHomePath(paths.output)},
+			{configLabel, shortenHomePath(paths.config)},
 			{"Current recording file", shortenHomePath(paths.current)},
 			{"Current microphone", mic},
-			{"Paths from", source},
 		}
 		err = writeStatusTable(w, rows)
 	}

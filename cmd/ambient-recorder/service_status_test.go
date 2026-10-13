@@ -39,7 +39,6 @@ func TestHumanServiceStatusTable(t *testing.T) {
 		{"Configuration file", "unavailable"},
 		{"Current recording file", "not running"},
 		{"Current microphone", "not running"},
-		{"Paths from", "unavailable"},
 	}
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
 	if len(lines) != len(want) {

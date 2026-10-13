@@ -53,16 +53,13 @@ func TestServiceStatusPaths(t *testing.T) {
 			if wantCurrent == "" {
 				wantCurrent = "none"
 			}
-			for label, value := range map[string]string{"Recording directory": live.OutputDir, "Configuration file": live.ConfigPath, "Current recording file": wantCurrent, "Paths from": "live service"} {
+			for label, value := range map[string]string{"Recording directory": live.OutputDir, "Configuration file": live.ConfigPath, "Current recording file": wantCurrent} {
 				if mode == "0" {
 					if got := humanStatusValue(t, out, label); got != value {
 						t.Errorf("status row %q = %q, want %q", label, got, value)
 					}
 				} else {
-					key := map[string]string{"Recording directory": "output_dir", "Configuration file": "config_path", "Current recording file": "current_file", "Paths from": "paths_source"}[label]
-					if key == "paths_source" {
-						value = "live"
-					}
+					key := map[string]string{"Recording directory": "output_dir", "Configuration file": "config_path", "Current recording file": "current_file"}[label]
 					want := fmt.Sprintf("%s=%q", key, value)
 					if !strings.Contains(out, want) {
 						t.Errorf("missing %q in %q", want, out)
@@ -71,6 +68,9 @@ func TestServiceStatusPaths(t *testing.T) {
 			}
 			if strings.Contains(out, saved.output) {
 				t.Errorf("saved settings override live service: %q", out)
+			}
+			if mode == "1" && !strings.Contains(out, `paths_source="live"`) {
+				t.Errorf("agent output lost path source: %q", out)
 			}
 		}
 	}
@@ -88,6 +88,15 @@ func TestServiceStatusPaths(t *testing.T) {
 			out, err := executeService(t, a, "", "status")
 			if err != nil || !strings.Contains(out, saved.output) || !strings.Contains(out, saved.config) || strings.Contains(out, live.OutputDir) {
 				t.Fatalf("saved paths: %q %v", out, err)
+			}
+			if mode == "0" {
+				for label, value := range map[string]string{"Recording directory (saved)": saved.output, "Configuration file (saved)": saved.config} {
+					if got := humanStatusValue(t, out, label); got != value {
+						t.Errorf("saved status row %q = %q, want %q", label, got, value)
+					}
+				}
+			} else if !strings.Contains(out, `paths_source="saved"`) {
+				t.Errorf("agent output lost saved path source: %q", out)
 			}
 			want := "unavailable"
 			if stopped {
