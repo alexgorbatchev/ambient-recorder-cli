@@ -74,8 +74,9 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
   tests, temporarily disable the change to demonstrate failure, then restore it.
   Test behavior rather than constant/configuration mirrors.
 - Keep hardware capture opt-in. Never install/start a persistent service as part
-  of a build or test. Keep recordings local; transcription and calendar features
-  are future work.
+  of a build or test. External processing runs only when `output.on_close_command`
+  is configured; tests use local commands without uploads or API credentials.
+  Calendar integration remains future work.
 - Native service tests use unique transient launchd jobs and retained `.tmp`
   plists, without audio capture or installation in `~/Library/LaunchAgents`.
   Never use the production service label in lifecycle tests.

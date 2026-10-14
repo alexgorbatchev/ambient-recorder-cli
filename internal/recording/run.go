@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/capture"
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/config"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/microphone"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/resample"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/storage"
@@ -31,12 +32,13 @@ const (
 
 // Config sets the output root and the speech encoding/durability tradeoffs.
 type Config struct {
-	Output       string
-	Bitrate      int
-	Complexity   int
-	SyncInterval time.Duration
-	Agent        bool
-	Microphones  []string
+	OnCloseCommand []string
+	Output         string
+	Bitrate        int
+	Complexity     int
+	SyncInterval   time.Duration
+	Agent          bool
+	Microphones    []string
 	// CurrentFilesChanged receives absolute source paths on open and empty on close.
 	// Run invokes it synchronously from the recording goroutine.
 	CurrentFilesChanged func([]string)
@@ -57,12 +59,16 @@ type runner struct {
 	microphoneFailures     map[string]time.Time
 	aggregateID            uint32
 	out                    *tracks
+	commands               *commands
 }
 
 // Run records until cancellation, retrying capture and storage faults. A native
 // call or disk write blocked for 90 seconds exits with status 2 so launchd can
 // relaunch the binary; it cannot reconstruct audio captured during a crash.
 func Run(ctx context.Context, cfg Config, stderr io.Writer) (err error) {
+	if err := config.ValidateCommand(cfg.OnCloseCommand); err != nil {
+		return err
+	}
 	if cfg.Output == "" || cfg.Bitrate < 6000 || cfg.Bitrate > 128000 || cfg.Complexity < 0 || cfg.Complexity > 10 || cfg.SyncInterval <= 0 {
 		return errors.New("output is required; bitrate must be 6000..128000, complexity 0..10, and sync interval positive")
 	}
@@ -94,6 +100,8 @@ func Run(ctx context.Context, cfg Config, stderr io.Writer) (err error) {
 	j := &journal{store: s, stderr: stderr, agent: cfg.Agent}
 	defer func() { err = errors.Join(err, j.close()) }()
 	r.store, r.journal = s, j
+	r.commands = newCommands(cfg.OnCloseCommand)
+	defer r.closeCommands()
 	monitor, watchErr := capture.WatchMicrophones()
 	if errors.Is(watchErr, capture.ErrCleanup) {
 		return watchErr
@@ -105,6 +113,7 @@ func Run(ctx context.Context, cfg Config, stderr io.Writer) (err error) {
 		defer func() { err = errors.Join(err, monitor.Close()) }()
 	}
 	r.out = &tracks{store: s, journal: j, rate: resample.Rate, bitrate: cfg.Bitrate, complexity: cfg.Complexity, currentFilesChanged: cfg.CurrentFilesChanged}
+	r.out.commands = r.commands
 	defer func() { err = errors.Join(err, r.out.close()) }()
 	j.event(slog.LevelInfo, "Recorder started", "pid", os.Getpid(), "bitrate", cfg.Bitrate, "complexity", cfg.Complexity, "sync_interval", cfg.SyncInterval.String(), "microphone_preferences", cfg.Microphones)
 	retry := initialRetry
@@ -270,6 +279,7 @@ func (r *runner) persist(ctx context.Context, out *tracks, at time.Time, pcm [][
 }
 
 func (r *runner) pulse() {
+	r.commands.report(r.journal)
 	select {
 	case r.progress <- struct{}{}:
 	default:

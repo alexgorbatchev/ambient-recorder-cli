@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/microphone"
@@ -28,10 +29,11 @@ type Input struct {
 }
 
 type Output struct {
-	Dir          string `toml:"dir"`
-	Bitrate      int    `toml:"bitrate"`
-	Complexity   int    `toml:"complexity"`
-	SyncInterval string `toml:"sync_interval"`
+	OnCloseCommand []string `toml:"on_close_command"`
+	Dir            string   `toml:"dir"`
+	Bitrate        int      `toml:"bitrate"`
+	Complexity     int      `toml:"complexity"`
+	SyncInterval   string   `toml:"sync_interval"`
 }
 
 func Defaults() (Settings, error) {
@@ -46,6 +48,9 @@ func Defaults() (Settings, error) {
 }
 
 func (s Settings) Validate() error {
+	if err := ValidateCommand(s.Output.OnCloseCommand); err != nil {
+		return err
+	}
 	interval, err := time.ParseDuration(s.Output.SyncInterval)
 	if err != nil || interval <= 0 {
 		return fmt.Errorf("output.sync_interval must be a positive duration: %q", s.Output.SyncInterval)
@@ -55,6 +60,19 @@ func (s Settings) Validate() error {
 	}
 	_, err = microphone.Parse(s.Input.Microphones)
 	return err
+}
+
+// ValidateCommand accepts an optional executable and literal argument array.
+func ValidateCommand(command []string) error {
+	if len(command) > 0 && strings.TrimSpace(command[0]) == "" {
+		return errors.New("output.on_close_command requires a nonempty executable")
+	}
+	for _, arg := range command {
+		if strings.ContainsRune(arg, 0) {
+			return errors.New("output.on_close_command cannot contain NUL bytes")
+		}
+	}
+	return nil
 }
 
 func DefaultPath() (string, error) {

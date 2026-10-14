@@ -24,6 +24,7 @@ type tracks struct {
 	frames                    uint64
 	rate, bitrate, complexity int
 	currentFilesChanged       func([]string)
+	commands                  *commands
 }
 
 func sourceNames(microphones int) []string {
@@ -170,7 +171,13 @@ func (t *tracks) close() error {
 	}
 	err := t.store.ClearCurrent()
 	for _, name := range t.names {
-		err = errors.Join(err, t.sinks[name].close())
+		s := t.sinks[name]
+		ready := s.encoder != nil && s.frames > 0
+		closeErr := s.close()
+		err = errors.Join(err, closeErr)
+		if ready && closeErr == nil {
+			t.commands.enqueue(s.file.Name())
+		}
 	}
 	t.sinks, t.names = nil, nil
 	return err

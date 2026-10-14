@@ -26,6 +26,23 @@
 
 [output]
 
+# output.on_close_command: executable and literal arguments for each finalized
+# source file. Default: [] (disabled); no CLI override. Runs serially in the
+# background after successful encoder finalization, synchronization and close.
+# {file} expands to the absolute Opus path; {stem} removes its .opus suffix.
+# Arguments preserve spaces. Shell syntax, '~' and environment variables are
+# not expanded; invoke a script or shell explicitly when needed. The command
+# inherits the recorder's working directory, PATH and environment. A launchd
+# service does not load your interactive shell environment or API credentials.
+# stdout/stderr go to {stem}.command.log (0600); failures are logged and recording
+# continues. Each command has a ten-minute timeout. Normal shutdown drains the
+# queue; launchd or a forced exit can interrupt it. No retries, persistent queue,
+# historical backfill, or overlap handling. Only a configured command can upload
+# recordings; its program owns credentials, transcript output and API costs.
+# Example with deepgram-transcribe installed and DEEPGRAM_API_KEY available:
+# on_close_command = ["deepgram-transcribe", "transcript", "create", "{file}", "--no-trim-silence", "--output", "{stem}.md"]
+on_close_command = []
+
 # output.dir: nonempty string naming the recording directory.
 # Default: $XDG_DATA_HOME/ambient-recorder, or
 #          ~/.local/share/ambient-recorder when XDG_DATA_HOME is unset.

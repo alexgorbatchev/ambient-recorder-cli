@@ -20,14 +20,14 @@
 
 # How it Really Works
 
-- Audio stays on this Mac. There are no uploads, transcription requests, API credentials, VAD, or calendar connections.
+- Audio stays on this Mac unless you configure `output.on_close_command` to invoke a program that uploads it. External programs manage their own credentials and costs. VAD and calendar connections are outside recording.
 - Configuration is read once at startup from `$XDG_CONFIG_HOME/ambient-recorder/config.toml`, falling back to `~/.config/ambient-recorder/config.toml`. Use `--config` to select another file. A missing default file uses built-in defaults; a missing explicitly selected file fails. Unknown keys, invalid types, and invalid final settings fail with an error. Explicit flags override file values, which override defaults. Restart recording to apply file edits.
 - The default output directory is `$XDG_DATA_HOME/ambient-recorder`, falling back to `~/.local/share/ambient-recorder`. The TOML `output.dir` value or `--output` overrides it. Relative output paths resolve from the working directory; use an absolute path for a stable destination. Directories and files are created with owner-only permissions.
-- Each input channel of the selected microphone has a mono file named `…-mic-1.opus`, `…-mic-2.opus`, and so on. Computer playback is a separate mono `…-playback.opus` file. Channel routing is automatic; a two-channel receiver needs its own Split mode enabled to separate its transmitters. Source numbers identify device channels, not people. Transcription is a future integration.
+- Each input channel of the selected microphone has a mono file named `…-mic-1.opus`, `…-mic-2.opus`, and so on. Computer playback is a separate mono `…-playback.opus` file. Channel routing is automatic; a two-channel receiver needs its own Split mode enabled to separate its transmitters. Source numbers identify device channels, not people. A configured file command can transcribe each source independently.
 - Silence remains in the recording. Encoding defaults to a 32,000 bit/s target per file and complexity 2. Additional channels increase storage and encoder work; actual file sizes vary with audio and container overhead.
 - Microphone preferences match case-sensitive names, name patterns such as `LG Ultra*`, or exact `uid:<UID>` identifiers printed by `microphone list`. In names, `*` matches any sequence of characters; all other punctuation is literal. Prefix any selector with `!` to exclude matching inputs globally, regardless of list position. Exclusions override every positive preference and wildcard fallback. `*` tries the macOS default first, then other eligible inputs. Unlisted microphones remain eligible through an implicit final `*` unless excluded. A higher-priority input becoming available triggers automatic switching. Device or format changes reopen capture while keeping existing source files and Opus streams open. Each file remains mono at 48 kHz across different hardware sample rates. Changes and recovery can leave gaps; overflow and microphone connections/disconnections are logged.
 - Audio pages are emitted while recording, approximately every 100 ms. Storage synchronization is attempted every five seconds. A crash can lose buffered audio or an incomplete final page, and the interrupted file lacks final duration trimming. [Ogg Opus readers must handle streams without an end-of-stream page](https://www.rfc-editor.org/rfc/rfc7845.html#section-3). Power-loss durability is not guaranteed.
-- A blocked capture, disk operation, or shutdown triggers process exit after 90 seconds. A configured supervisor restarts it. Sleep, permissions, full disks, and process downtime prevent continuous capture.
+- A blocked capture or disk operation triggers process exit after 90 seconds. A configured supervisor restarts it. Waiting for configured file commands keeps the watchdog alive; each command has a ten-minute timeout. Sleep, permissions, full disks, and process downtime prevent continuous capture.
 - Only one recorder may use an output directory. Recording does not prune files; free disk space remains the user's responsibility.
 - Source files share the same segment timestamp and frame timeline. A channel appearing mid-segment gets silence before its first samples; a disappearing channel remains silent until the hour rotates. Segment names use acquisition time. If that exact path is occupied, exclusive creation retries with the current timestamp; existing files remain intact. Filenames alone cannot reveal every gap within a segment, including a microphone switch.
 - If an input opens but produces no capture frames for five seconds, the recorder skips that input for 30 seconds and immediately tries another eligible microphone. Existing source files and Opus streams stay open. After the cooldown, a higher-priority microphone becomes eligible again. This detects missing capture frames; it does not treat silence as a failure.
@@ -149,6 +149,23 @@ This example writes beneath the working directory, prefers names starting with `
 Use `[input]` and `[output]` tables, or dotted keys such as `output.dir = "recordings"` at the document root. Flat root keys are rejected. `--output` overrides `output.dir`, and the encoding and synchronization flags override their corresponding `[output]` values.
 
 # Background Recording
+
+## Automatic transcription or other file commands
+
+Set `output.on_close_command` to run your program once for each nonempty source file after successful finalization and close. An omitted value or `[]` disables the hook. For example, with `deepgram-transcribe` installed and `DEEPGRAM_API_KEY` available to the recording process:
+
+```toml
+[output]
+on_close_command = ["deepgram-transcribe", "transcript", "create", "{file}", "--no-trim-silence", "--output", "{stem}.md"]
+```
+
+`{file}` is the absolute Opus path; `{stem}` is that path without `.opus`. This example saves Markdown beside each source recording. Arguments are passed literally, preserving spaces; shell features require an explicit script or shell. Hourly cuts remain unchanged, with no overlap processing.
+
+Commands run serially in the background while capture continues. Their stdout and stderr go to sibling `.command.log` files; failures also appear in recording diagnostics. Each job has a ten-minute limit and is attempted once. Orderly shutdown waits for the queue, but a supervisor or forced termination can interrupt it. Pending jobs are not recovered after a crash, and existing recordings are not backfilled.
+
+Commands inherit the recorder's working directory, PATH and environment. A launchd service does not load your interactive shell environment: provide required credentials and executable paths through a wrapper script or the service environment. The external program determines uploads, billing and output files. Restart recording after editing the configuration.
+
+## Service lifecycle
 
 Place the executable at its permanent location, such as `~/.local/bin/ambient-recorder`. Run recording in the foreground to grant permissions, then stop it before installing the background service. Run service commands as your logged-in user, without sudo.
 

@@ -4,13 +4,13 @@ description: Use when operating ambient-recorder to record audio, configure micr
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-01 22:02
-  last_modified: 2026-10-13 16:29
+  last_modified: 2026-10-14 11:51
   status: current
 ---
 
 ## Recording workflow
 
-Use macOS 14.2 or later and an available microphone. The executable includes its codec and uses Apple audio services. Grant microphone and system audio recording access when macOS requests it. Audio stays on the Mac; transcription, VAD, uploads, and calendar integration are future work.
+Use macOS 14.2 or later and an available microphone. The executable includes its codec and uses Apple audio services. Grant microphone and system audio recording access when macOS requests it. Audio stays on the Mac unless output.on_close_command invokes an external program that uploads it. VAD and calendar integration are outside recording.
 
 ```sh
 AGENT=1 ambient-recorder microphone list
@@ -104,6 +104,7 @@ dir = "recordings"
 bitrate = 32000
 complexity = 2
 sync_interval = "5s"
+on_close_command = []
 ```
 
 Use `[input]` and `[output]` or root dotted keys such as `output.dir`. Unknown keys, flat root keys, invalid types, and invalid final settings fail. Omitted settings use defaults: microphones ["*"], default data directory, bitrate 32000, complexity 2, sync interval 5s. Relative paths resolve against the process working directory; `~` and environment-variable text in TOML strings remain literal. Use absolute paths for background recording.
@@ -113,6 +114,19 @@ Order input.microphones from highest to lowest priority. Case-sensitive exact na
 `*` tries the macOS default input first and other eligible inputs in stable UID/ID order. An implicit final `*` retains unlisted inputs; [] also permits all inputs. Put explicit positive preferences before *. If exclusions remove every input, recording retries until an eligible input appears. Device connect/disconnect and selection changes are logged. Higher-priority inputs becoming available trigger automatic switching. An input producing no capture frames for five seconds is deferred for 30 seconds while another eligible input is tried; silence is still recorded. Microphone switching preserves existing source files and encoders and can leave a capture gap.
 
 ## Files, recovery and background recording
+
+### Optional finalized-file command
+
+Set output.on_close_command to an array of strings containing an executable followed by literal arguments. Omit it or use [] to disable execution. A blank executable or any NUL byte fails configuration validation. There is no CLI flag. Replace {file} with the absolute finalized Opus path and {stem} with that path without .opus in any argument. Other text remains literal; invoke a script or shell explicitly for shell features. The executable inherits the recorder's working directory and environment; executable lookup uses its PATH. A background service does not load interactive shell startup files. Supply command credentials and PATH through the service environment or a wrapper script.
+
+Run one command for each nonempty source file whose encoder finalization, synchronization and close succeed, including hourly rotation and orderly recorder shutdown. Commands run serially outside capture. Write combined stdout/stderr to {stem}.command.log, created with mode 0600. Record success or failure in the recorder diagnostics; command errors do not change recording's exit status or stop capture. Terminate the command process group after ten minutes. Orderly shutdown waits for queued jobs while maintaining watchdog progress. Supervisor termination or a crash can interrupt jobs; the queue is in memory, with no retries or historical backfill. Files are passed unchanged, without overlap. The external program owns transcript creation, credentials, uploads and billing.
+
+For Deepgram Markdown alongside each Opus file, install deepgram-transcribe, provide DEEPGRAM_API_KEY to its inherited environment and set:
+
+```toml
+[output]
+on_close_command = ["deepgram-transcribe", "transcript", "create", "{file}", "--no-trim-silence", "--output", "{stem}.md"]
+```
 
 Use `ambient-recorder config print-file` to locate the existing configuration selected by --config or the XDG default. It prints only the absolute path and a newline, even if the TOML contents are invalid; an absent file exits 1 with empty stdout. Use `ambient-recorder recording print-dir` to resolve storage from the selected TOML or defaults, with relative paths based on the invocation's working directory. Recording path commands honor --config and require an explicitly selected configuration file to exist. Use `ambient-recorder recording print-file` to list every open source segment in that directory, one absolute path per line, or add --output to target a recording started with an override or a service pinned to a different directory. Results are snapshots; an open file does not establish that audio frames are currently arriving. The recorder atomically publishes a .recording.current JSON snapshot containing relative source paths after encoder initialization, removes it before finalization, and holds an exclusive lock on every source segment until close. Queries return only segments that are still locked, rejecting stale snapshots after a crash. Restart with the updated executable to publish source-file snapshots.
 

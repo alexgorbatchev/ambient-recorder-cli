@@ -107,7 +107,8 @@ func recordingConfig(cmd *cobra.Command, path string) (recording.Config, string,
 		return recording.Config{}, "", err
 	}
 	return recording.Config{
-		Output: cfg.Output.Dir, Bitrate: cfg.Output.Bitrate, Complexity: cfg.Output.Complexity,
+		OnCloseCommand: cfg.Output.OnCloseCommand,
+		Output:         cfg.Output.Dir, Bitrate: cfg.Output.Bitrate, Complexity: cfg.Output.Complexity,
 		SyncInterval: interval, Microphones: cfg.Input.Microphones, Agent: cobrahelptree.IsAgentMode(),
 	}, loaded, nil
 }

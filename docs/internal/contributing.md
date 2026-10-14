@@ -1,6 +1,6 @@
 ---
 created_on: 2026-09-30 12:30
-last_modified: 2026-10-13 16:29
+last_modified: 2026-10-14 11:51
 status: current
 ---
 
@@ -42,6 +42,10 @@ Capture failures retry from 250 ms to five seconds. Storage failures close the w
 Daily logs use debug-level JSON. On reopening a log, an incomplete tail is preserved inside a recovery event before valid newline-delimited logging resumes. Failed logging falls back to stderr. Audio and logs synchronize at the configured interval, but parent directories are not explicitly synchronized; this is not a power-loss durability guarantee.
 
 Each capture opening reads the selected microphone's Core Audio device name, transport, input stream terminal type, manufacturer, and model name. The daily log and agent stderr retain full metadata, sample rate and output directory. Human stderr uses tint with the microphone name, connection, playback source and output path; startup inventory and encoder metadata stay in diagnostics. `microphone list` exposes hardware details explicitly. Metadata failures do not interrupt capture. A device can report a generic microphone terminal type even when it belongs to a headset or display; the recorder does not infer hardware categories from names.
+
+### Finalized-file commands
+
+The optional `output.on_close_command` is an executable/argument array passed from TOML through the CLI recording config. `tracks.close` queues only nonempty source files whose encoder finalization, Sync and Close all succeed. A single owned worker expands `{file}` and `{stem}` without a shell, inherits the recorder environment and working directory, and directs stdout/stderr to a 0600 sibling `.command.log`. Commands have a ten-minute context deadline and a separate process group so timeout kills shell children as well. Results return through a mutex-protected queue; only the recorder goroutine writes the journal. Capture never waits for command execution. Deferred cleanup finalizes sources, drains jobs while pulsing the watchdog, joins the worker, then closes diagnostics and storage. Command failures are logged rather than returned as capture failures. The queue is in memory, with no retries, crash recovery, backfill or overlap processing. Supervisor termination can interrupt shutdown jobs.
 
 ## CI and Release Packaging
 

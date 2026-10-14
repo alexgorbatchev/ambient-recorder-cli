@@ -43,7 +43,7 @@ func TestConfigInitAndDefaultDiscovery(t *testing.T) {
 
 func TestConfigOverrides(t *testing.T) {
 	path := filepath.Join(testdir.New(t), "config.toml")
-	input := "[input]\nmicrophones = ['uid:headset', '*']\n[output]\ndir = 'configured audio'\nbitrate = 24000\ncomplexity = 0\nsync_interval = '2s'\n"
+	input := "[input]\nmicrophones = ['uid:headset', '*']\n[output]\ndir = 'configured audio'\nbitrate = 24000\ncomplexity = 0\nsync_interval = '2s'\non_close_command = ['/bin/echo', '{file}']\n"
 	if err := os.WriteFile(path, []byte(input), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -72,6 +72,9 @@ func TestConfigOverrides(t *testing.T) {
 		}
 		if !slices.Equal(actual.Microphones, []string{"uid:headset", "*"}) {
 			t.Fatalf("preferences lost: %+v", actual)
+		}
+		if !slices.Equal(actual.OnCloseCommand, []string{"/bin/echo", "{file}"}) {
+			t.Fatalf("finalized-file command lost: %+v", actual)
 		}
 		if override {
 			if actual.Output != "flag audio" || actual.Bitrate != 48000 || actual.Complexity != 4 || actual.SyncInterval != 7*time.Second {
