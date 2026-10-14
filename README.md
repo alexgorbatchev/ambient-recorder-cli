@@ -35,7 +35,7 @@
 
 # Installation
 
-Download the prebuilt binary for your Mac from [GitHub Releases](https://github.com/alexgorbatchev/ambient-recorder-cli/releases). Use `arm64` for Apple Silicon or `amd64` for Intel. Each archive includes the executable, configuration example, embedded usage reference and component licenses.
+Download the prebuilt binary for your Mac from [GitHub Releases](https://github.com/alexgorbatchev/ambient-recorder-cli/releases). Use `arm64` for Apple Silicon or `amd64` for Intel. Each archive includes the executable, configuration example, usage reference and component licenses.
 
 For Apple Silicon, download version 1.5.0, verify its checksum and put the executable on your PATH:
 
