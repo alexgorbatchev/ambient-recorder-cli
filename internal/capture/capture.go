@@ -18,7 +18,7 @@ import (
 	"unsafe"
 )
 
-// MaxFrames is the capacity required by Read for one native capture block.
+// MaxFrames is the maximum frame count in one native capture block.
 const MaxFrames = int(C.AR_MAX_FRAMES)
 
 const SampleTimeValid = uint32(C.kAudioTimeStampSampleTimeValid)
@@ -33,8 +33,10 @@ type Capture struct {
 	native *C.ARCapture
 	Rate   int
 	Mic    Device
-	anchor time.Time
-	host   int64
+	// Channels contains each microphone input followed by the mono playback tap.
+	Channels int
+	anchor   time.Time
+	host     int64
 }
 
 // Chunk carries the acquisition timestamp, not the time Go received the data.
@@ -59,6 +61,7 @@ func Open(microphone uint32) (*Capture, error) {
 	}
 	anchor, host := hostSnapshot()
 	c := &Capture{native: native, Rate: int(C.ar_capture_rate(native)), Mic: describeDevice(uint32(C.ar_capture_microphone(native))), anchor: anchor, host: host}
+	c.Channels = int(C.ar_capture_channels(native))
 	return c, nil
 }
 
@@ -95,9 +98,10 @@ func (c *Capture) reanchor(now time.Time, host int64) time.Duration {
 	return shift
 }
 
-// Read copies the next block into caller-owned memory. Zero frames means empty.
+// Read copies interleaved source channels into caller-owned memory.
+// The buffer needs MaxFrames*Channels samples. Zero frames means empty.
 func (c *Capture) Read(pcm []float32) (Chunk, error) {
-	if c.native == nil || len(pcm) < MaxFrames {
+	if c.native == nil || c.Channels < 2 || len(pcm) < MaxFrames*c.Channels {
 		return Chunk{}, errors.New("capture is closed or PCM buffer is too small")
 	}
 	var chunk C.ARChunk

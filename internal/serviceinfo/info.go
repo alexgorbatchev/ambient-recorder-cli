@@ -23,16 +23,16 @@ const Environment = "AMBIENT_RECORDER_SERVICE_SOCKET"
 
 const (
 	timeout         = time.Second
-	maxIdentitySize = 4096
+	maxIdentitySize = 1 << 20
 )
 
 // Info is a snapshot of the running process, not its executable or config on disk.
 type Info struct {
-	Version     string  `json:"version"`
-	OutputDir   string  `json:"output_dir"`
-	ConfigPath  string  `json:"config_path"`
-	CurrentFile string  `json:"current_file"`
-	Microphone  *string `json:"microphone,omitempty"`
+	Version      string   `json:"version"`
+	OutputDir    string   `json:"output_dir"`
+	ConfigPath   string   `json:"config_path"`
+	CurrentFiles []string `json:"current_files"`
+	Microphone   *string  `json:"microphone,omitempty"`
 }
 
 // Path keeps the endpoint beside its per-user launchd configuration. A short
@@ -92,10 +92,11 @@ func Listen(path string, info Info) (*Server, error) {
 	return s, nil
 }
 
-// SetCurrentFile publishes sink transitions; an empty path means no open file.
-func (s *Server) SetCurrentFile(path string) {
+// SetCurrentFiles publishes the complete source snapshot. Copy the caller's
+// slice so HTTP readers can encode it after releasing the snapshot lock.
+func (s *Server) SetCurrentFiles(paths []string) {
 	s.mu.Lock()
-	s.info.CurrentFile = path
+	s.info.CurrentFiles = append([]string{}, paths...)
 	s.mu.Unlock()
 }
 

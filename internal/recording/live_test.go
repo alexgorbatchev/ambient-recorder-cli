@@ -62,7 +62,7 @@ func TestLiveMicrophoneSwitch(t *testing.T) {
 		}
 	}()
 	r := &runner{store: s, journal: j, progress: make(chan struct{}, 1), cfg: Config{Output: root, SyncInterval: time.Second}}
-	r.out = &sink{store: s, journal: j, rate: resample.Rate, bitrate: 32000, complexity: 2}
+	r.out = &tracks{store: s, journal: j, rate: resample.Rate, bitrate: 32000, complexity: 2}
 	defer func() {
 		if err := r.out.close(); err != nil {
 			t.Error(err)
@@ -88,13 +88,13 @@ func TestLiveMicrophoneSwitch(t *testing.T) {
 		if opened["microphone_id"] != float64(d.ID) {
 			t.Fatalf("requested input %q was not selected: %s", d.Name, diagnostic.String())
 		}
-		if r.out.file == nil {
+		if r.out.sinks["mic-1"].file == nil {
 			t.Fatal("session ended without retaining the output file")
 		}
 		if i == 0 {
-			path = r.out.file.Name()
+			path = r.out.sinks["mic-1"].file.Name()
 		}
-		if r.out.file.Name() != path {
+		if r.out.sinks["mic-1"].file.Name() != path {
 			t.Fatal("microphone switch opened another file")
 		}
 		t.Logf("recorded %q (uid=%s) into %s", d.Name, d.UID, path)

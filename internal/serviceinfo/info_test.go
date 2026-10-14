@@ -31,7 +31,7 @@ func socketPath(t *testing.T) string {
 
 func TestConcurrentRecordingSnapshots(t *testing.T) {
 	path := socketPath(t)
-	info := Info{Version: "1", OutputDir: "/audio & 路径", ConfigPath: "/config.toml", Microphone: new("")}
+	info := Info{Version: "1", OutputDir: "/audio & 路径", ConfigPath: "/config.toml", Microphone: new(""), CurrentFiles: []string{}}
 	s, err := Listen(path, info)
 	if err != nil {
 		t.Fatal(err)
@@ -46,16 +46,16 @@ func TestConcurrentRecordingSnapshots(t *testing.T) {
 		wg.Go(func() {
 			for range 30 {
 				if worker == 0 {
-					s.SetCurrentFile(info.OutputDir + "/file.opus")
+					s.SetCurrentFiles([]string{info.OutputDir + "/mic-1.opus", info.OutputDir + "/playback.opus"})
 				} else if worker == 1 {
-					s.SetCurrentFile("")
+					s.SetCurrentFiles([]string{})
 				} else if worker == 2 {
 					s.SetMicrophone("USB Headset")
 				} else if worker == 3 {
 					s.SetMicrophone("")
 				}
 				got, err := Query(context.Background(), path)
-				if err != nil || got.Version != info.Version || got.OutputDir != info.OutputDir || got.ConfigPath != info.ConfigPath || (got.CurrentFile != "" && got.CurrentFile != info.OutputDir+"/file.opus") || got.Microphone == nil || (*got.Microphone != "" && *got.Microphone != "USB Headset") {
+				if err != nil || got.Version != info.Version || got.OutputDir != info.OutputDir || got.ConfigPath != info.ConfigPath || (got.CurrentFiles == nil || (len(got.CurrentFiles) != 0 && (len(got.CurrentFiles) != 2 || got.CurrentFiles[0] != info.OutputDir+"/mic-1.opus" || got.CurrentFiles[1] != info.OutputDir+"/playback.opus"))) || got.Microphone == nil || (*got.Microphone != "" && *got.Microphone != "USB Headset") {
 					t.Errorf("snapshot=%+v err=%v", got, err)
 					return
 				}
@@ -169,7 +169,7 @@ func TestVersionFailures(t *testing.T) {
 		{"invalid json", "broken", 200, 0},
 		{"empty version", `{"version":""}`, 200, 0},
 		{"error response", `{"version":"1"}`, 500, 0},
-		{"oversize", strings.Repeat(" ", 4096) + `{"version":"1"}`, 200, 0},
+		{"oversize", strings.Repeat(" ", maxIdentitySize) + `{"version":"1"}`, 200, 0},
 		{"timeout", `{"version":"1"}`, 200, timeout + 100*time.Millisecond},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

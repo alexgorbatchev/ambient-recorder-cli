@@ -2,9 +2,9 @@
 
 # What It Does
 
-- **Continuous capture:** Mixes microphone and playback into one mono track.
+- **Continuous capture:** Records each microphone channel and computer playback into separate mono files.
 - **Microphone preferences:** Selects from an ordered TOML list and switches automatically when a preferred input becomes available.
-- **Hourly files:** Writes `YYYY/MM/DD/HH-MM-SS.000000000.opus` using the segment's start time with nine fractional-second digits.
+- **Hourly files:** Writes `YYYY/MM/DD/HH-MM-SS.000000000-<source>.opus` using the segment's start time with nine fractional-second digits.
 - **Diagnostics:** Appends events to `YYYY/MM/DD/log.nljson`, including capture changes, dropped frames, storage errors, and segment boundaries.
 - **Background service:** Starts recording at login and requests a restart after exit.
 
@@ -15,7 +15,7 @@
 - Start recording and grant microphone and system audio recording access when macOS requests it.
 - Check the capture log event for the selected microphone, connection type, playback source, and absolute output directory. Use `microphone list` to inspect hardware details.
 - Leave the process running. New files begin at local hour boundaries; existing recordings remain intact.
-- Press Ctrl-C to finish the current file and stop a foreground recording.
+- Press Ctrl-C to finish the current source files and stop a foreground recording.
 - Use `service install` to enable background recording at each login after reboot; use `service stop` to stop it and disable startup.
 
 # How it Really Works
@@ -23,14 +23,14 @@
 - Audio stays on this Mac. There are no uploads, transcription requests, API credentials, VAD, or calendar connections.
 - Configuration is read once at startup from `$XDG_CONFIG_HOME/ambient-recorder/config.toml`, falling back to `~/.config/ambient-recorder/config.toml`. Use `--config` to select another file. A missing default file uses built-in defaults; a missing explicitly selected file fails. Unknown keys, invalid types, and invalid final settings fail with an error. Explicit flags override file values, which override defaults. Restart recording to apply file edits.
 - The default output directory is `$XDG_DATA_HOME/ambient-recorder`, falling back to `~/.local/share/ambient-recorder`. The TOML `output.dir` value or `--output` overrides it. Relative output paths resolve from the working directory; use an absolute path for a stable destination. Directories and files are created with owner-only permissions.
-- Mono output combines both sources. It cannot provide separate microphone/playback transcripts. [Deepgram lists Ogg and Opus as supported formats](https://developers.deepgram.com/docs/supported-audio-formats); transcription is a separate future integration.
-- Silence remains in the recording. Encoding defaults to a 32,000 bit/s target and complexity 2. Actual file size varies with audio and container overhead.
-- Microphone preferences match case-sensitive names, name patterns such as `LG Ultra*`, or exact `uid:<UID>` identifiers printed by `microphone list`. In names, `*` matches any sequence of characters; all other punctuation is literal. Prefix any selector with `!` to exclude matching inputs globally, regardless of list position. Exclusions override every positive preference and wildcard fallback. `*` tries the macOS default first, then other eligible inputs. Unlisted microphones remain eligible through an implicit final `*` unless excluded. A higher-priority input becoming available triggers automatic switching. Device or format changes reopen capture while keeping the current file and Opus stream open. Output remains mono at 48 kHz across different hardware sample rates. Changes and recovery can leave gaps; overflow and microphone connections/disconnections are logged.
+- Each input channel of the selected microphone has a mono file named `…-mic-1.opus`, `…-mic-2.opus`, and so on. Computer playback is a separate mono `…-playback.opus` file. Channel routing is automatic; a two-channel receiver needs its own Split mode enabled to separate its transmitters. Source numbers identify device channels, not people. Transcription is a future integration.
+- Silence remains in the recording. Encoding defaults to a 32,000 bit/s target per file and complexity 2. Additional channels increase storage and encoder work; actual file sizes vary with audio and container overhead.
+- Microphone preferences match case-sensitive names, name patterns such as `LG Ultra*`, or exact `uid:<UID>` identifiers printed by `microphone list`. In names, `*` matches any sequence of characters; all other punctuation is literal. Prefix any selector with `!` to exclude matching inputs globally, regardless of list position. Exclusions override every positive preference and wildcard fallback. `*` tries the macOS default first, then other eligible inputs. Unlisted microphones remain eligible through an implicit final `*` unless excluded. A higher-priority input becoming available triggers automatic switching. Device or format changes reopen capture while keeping existing source files and Opus streams open. Each file remains mono at 48 kHz across different hardware sample rates. Changes and recovery can leave gaps; overflow and microphone connections/disconnections are logged.
 - Audio pages are emitted while recording, approximately every 100 ms. Storage synchronization is attempted every five seconds. A crash can lose buffered audio or an incomplete final page, and the interrupted file lacks final duration trimming. [Ogg Opus readers must handle streams without an end-of-stream page](https://www.rfc-editor.org/rfc/rfc7845.html#section-3). Power-loss durability is not guaranteed.
 - A blocked capture, disk operation, or shutdown triggers process exit after 90 seconds. A configured supervisor restarts it. Sleep, permissions, full disks, and process downtime prevent continuous capture.
 - Only one recorder may use an output directory. Recording does not prune files; free disk space remains the user's responsibility.
-- Segment names use acquisition time. If that exact path is occupied, exclusive creation retries with the current timestamp; existing files remain intact. Filenames alone cannot reveal every gap within a segment, including a microphone switch.
-- If an input opens but produces no capture frames for five seconds, the recorder skips that input for 30 seconds and immediately tries another eligible microphone. The current output file and Opus stream stay open. After the cooldown, a higher-priority microphone becomes eligible again. This detects missing capture frames; it does not treat silence as a failure.
+- Source files share the same segment timestamp and frame timeline. A channel appearing mid-segment gets silence before its first samples; a disappearing channel remains silent until the hour rotates. Segment names use acquisition time. If that exact path is occupied, exclusive creation retries with the current timestamp; existing files remain intact. Filenames alone cannot reveal every gap within a segment, including a microphone switch.
+- If an input opens but produces no capture frames for five seconds, the recorder skips that input for 30 seconds and immediately tries another eligible microphone. Existing source files and Opus streams stay open. After the cooldown, a higher-priority microphone becomes eligible again. This detects missing capture frames; it does not treat silence as a failure.
 - Recording writes timestamped INFO, WARN, and ERROR events to stderr, including microphone connections, disconnections, selection changes, and capture startup. Human logs show the selected microphone and connection, playback source, recording paths, and useful error/retry details. The initial list of available devices, hardware IDs, manufacturer/model information, and encoder settings stay in diagnostics. Use `microphone list` to inspect available inputs. Human logs use compact single lines with the local date and time, UTC offset, and an `INF`, `WRN`, or `ERR` severity tag. Colors are enabled when stderr is a terminal; redirected output is plain text. A nonempty `NO_COLOR` or `TERM=dumb` disables colors. `AGENT=1` uses newline-delimited JSON without colors and retains all diagnostic fields and startup inventory events. The daily JSON log also retains every event, including DEBUG progress and full device metadata. Device details are reported by the hardware: an input can report a generic microphone type even when it belongs to a headset or display. If writing the daily log fails, the event goes to stderr with `log_error`. Recording writes no normal output to stdout. Normal cancellation exits 0, startup or cleanup failure exits 1, and the watchdog exits 2.
 
 # Installation
@@ -92,7 +92,7 @@ AGENT=1 ambient-recorder skill
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--output <path>` | | XDG user data `/ambient-recorder` | Recording and daily log directory |
-| `--bitrate <bits/s>` | | `32000` | Opus target bitrate, 6000–128000 |
+| `--bitrate <bits/s>` | | `32000` | Opus target bitrate per source file, 6000–128000 |
 | `--complexity <number>` | | `2` | Encoding complexity, 0–10; higher uses more CPU |
 | `--sync-interval <duration>` | | `5s` | Storage synchronization interval |
 
@@ -162,7 +162,7 @@ ambient-recorder service status --details
 
 The service starts when you log in after reboot. It requests a restart after exit with a five-second throttle, and stops at logout. Recording requires an active login session and cannot continue during sleep or before login. macOS Background Items settings or capture permissions can prevent startup or recording. Check permissions separately for background operation. [Apple documents startup and agent supervision](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html).
 
-Status displays an aligned two-column table without headers or borders. It reports whether a service file exists and whether macOS has loaded the job, the CLI and live service versions, recording paths and the microphone currently opened by the recorder. Directory and config labels include `(saved)` when read from saved service settings. Home-directory paths use `~/` in human output; agent output retains absolute paths. A loaded job can still be retrying capture; check the daily `log.nljson` and `supervisor.stderr.log` in the recording directory to confirm audio capture.
+Status displays an aligned two-column table without headers or borders. It reports whether a service file exists and whether macOS has loaded the job, the CLI and live service versions, recording paths, all current source files and the microphone currently opened by the recorder. Directory and config labels include `(saved)` when read from saved service settings. Home-directory paths use `~/` in human output; agent output retains absolute paths. A loaded job can still be retrying capture; check the daily `log.nljson` and `supervisor.stderr.log` in the recording directory to confirm audio capture.
 
 The service includes the absolute TOML path, so microphone preferences and encoding settings are read on each process start. Run `service restart` after editing them or upgrading the CLI. Start and restart refresh the installed executable and live-status endpoint while preserving your recording settings. Restart waits for the old job to finish unloading before loading its replacement. Changing the pinned recording directory or selecting another config file requires uninstalling and reinstalling the service. `--output` on install overrides the directory without editing TOML.
 

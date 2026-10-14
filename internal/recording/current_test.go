@@ -4,91 +4,66 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/storage"
-	"github.com/alexgorbatchev/ambient-recorder-cli/internal/testdir"
 )
 
-func TestSinkCurrentFile(t *testing.T) {
-	root := testdir.New(t)
-	s, err := storage.Open(root)
-	if err != nil {
-		t.Fatal(err)
+func TestTrackCurrentFiles(t *testing.T) {
+	r := newTrackRunner(t)
+	var reported []string
+	var reports [][]string
+	r.out.currentFilesChanged = func(paths []string) {
+		reported = append([]string(nil), paths...)
+		reports = append(reports, append([]string(nil), paths...))
 	}
-	t.Cleanup(func() {
-		if err := s.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	j := &journal{store: s}
-	t.Cleanup(func() {
-		if err := j.close(); err != nil {
-			t.Error(err)
-		}
-	})
-	var reported string
-	var reports []string
-	out := &sink{store: s, journal: j, rate: 48000, bitrate: 32000, complexity: 2, currentFileChanged: func(path string) {
-		reported = path
-		reports = append(reports, path)
-	}}
-	t.Cleanup(func() {
-		if err := out.close(); err != nil {
-			t.Error(err)
-		}
-	})
 	start := time.Date(2026, 10, 5, 23, 59, 59, 0, time.UTC)
 	for _, at := range []time.Time{start, start.Add(10 * time.Millisecond), start.Add(time.Second)} {
-		if err := out.write(at, make([]float32, 480)); err != nil {
+		if err := r.out.write(at, [][]float32{make([]float32, 480), make([]float32, 480)}); err != nil {
 			t.Fatal(err)
 		}
-		got, err := storage.CurrentFile(root)
-		if err != nil || got != out.file.Name() {
-			t.Fatalf("current=%q err=%v want=%q", got, err, out.file.Name())
+		got, err := storage.CurrentFiles(r.cfg.Output)
+		if err != nil || !reflect.DeepEqual(got, r.out.paths()) {
+			t.Fatalf("current=%q err=%v want=%q", got, err, r.out.paths())
 		}
-		if reported != got {
-			t.Fatalf("service reports %q; open file is %q", reported, got)
+		if !reflect.DeepEqual(reported, got) {
+			t.Fatalf("service reports %v; open files are %v", reported, got)
 		}
-		if at == start.Add(time.Second) && filepath.Base(got) != "00-00-00.000000000.opus" {
-			t.Fatalf("rotation left old pointer: %s", got)
+		if at == start.Add(time.Second) && filepath.Base(got[0]) != "00-00-00.000000000-mic-1.opus" {
+			t.Fatalf("rotation left old snapshot: %v", got)
 		}
 	}
-	if err := out.close(); err != nil {
+	if err := r.out.close(); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := storage.CurrentFile(root); !errors.Is(err, storage.ErrNoCurrentFile) || got != "" {
-		t.Fatalf("closed segment reported: %q %v", got, err)
+	if got, err := storage.CurrentFiles(r.cfg.Output); !errors.Is(err, storage.ErrNoCurrentFiles) || len(got) != 0 {
+		t.Fatalf("closed segments reported: %v %v", got, err)
 	}
-	if reported != "" || len(reports) != 4 || reports[1] != "" || reports[3] != "" {
-		t.Fatalf("open/rotation/close reports: %q", reports)
+	if len(reported) != 0 || len(reports) != 4 || len(reports[1]) != 0 || len(reports[3]) != 0 {
+		t.Fatalf("open/rotation/close reports: %v", reports)
 	}
 }
 
-func TestSinkCurrentFilePublicationFailure(t *testing.T) {
-	root := testdir.New(t)
-	s, err := storage.Open(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := s.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	pointer := filepath.Join(root, ".recording.current")
+func TestTrackCurrentFilesPublicationFailure(t *testing.T) {
+	r := newTrackRunner(t)
+	pointer := filepath.Join(r.cfg.Output, ".recording.current")
 	if err := os.Mkdir(pointer, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(pointer, "preserve"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	out := &sink{store: s, journal: &journal{store: s}, rate: 48000, bitrate: 32000, complexity: 2, currentFileChanged: func(path string) { t.Fatalf("failed segment reported as current: %q", path) }}
-	if err := out.write(time.Now(), make([]float32, 480)); err == nil {
-		t.Fatal("recording proceeded without publishing its active file")
+	r.out.currentFilesChanged = func(paths []string) {
+		if len(paths) > 0 {
+			t.Fatalf("failed group reported as current: %v", paths)
+		}
 	}
-	if out.file != nil || out.encoder != nil {
+	if err := r.out.write(time.Now(), [][]float32{make([]float32, 480), make([]float32, 480)}); err == nil {
+		t.Fatal("recording proceeded without publishing active files")
+	}
+	if len(r.out.sinks) != 0 {
 		t.Fatal("failed open retained recording resources")
 	}
 }

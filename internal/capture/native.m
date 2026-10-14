@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <errno.h>
 #include "native.h"
 #include "properties.h"
 
@@ -16,7 +17,7 @@ _Static_assert(ATOMIC_LLONG_LOCK_FREE == 2, "capture requires lock-free native c
 enum { AR_MAX_WATCHES = AR_MAX_STREAMS + 3 };
 typedef struct {
     ARChunk info;
-    float pcm[AR_MAX_FRAMES];
+    float *pcm;
 } ARBlock;
 typedef struct {
     AudioObjectID object;
@@ -31,6 +32,7 @@ struct ARCapture {
     int running;
     double rate;
     uint32_t channels;
+    float *samples;
     _Atomic uint64_t head;
     _Atomic uint64_t tail;
     _Atomic uint64_t dropped;
@@ -39,6 +41,17 @@ struct ARCapture {
     unsigned watch_count;
     ARBlock blocks[AR_QUEUE_BLOCKS];
 };
+
+static OSStatus allocate_blocks(ARCapture *capture) {
+    size_t channels = capture->channels;
+    if (!channels || channels > UINT32_MAX / AR_MAX_FRAMES ||
+        channels > SIZE_MAX / sizeof(float) / AR_MAX_FRAMES / AR_QUEUE_BLOCKS) return EINVAL;
+    size_t stride = AR_MAX_FRAMES * channels;
+    capture->samples = calloc(AR_QUEUE_BLOCKS, stride * sizeof(float));
+    if (!capture->samples) return ENOMEM;
+    for (unsigned i = 0; i < AR_QUEUE_BLOCKS; i++) capture->blocks[i].pcm = capture->samples + i * stride;
+    return noErr;
+}
 
 // The HAL owns these buffers. No allocation, lock, Go callback or I/O is allowed here.
 static OSStatus capture_io(AudioObjectID device, const AudioTimeStamp *now, const AudioBufferList *input,
@@ -51,6 +64,10 @@ static OSStatus capture_io(AudioObjectID device, const AudioTimeStamp *now, cons
     for (UInt32 i = 0; i < input->mNumberBuffers; i++) {
         const AudioBuffer *buffer = &input->mBuffers[i];
         if (!buffer->mNumberChannels) continue;
+        if (buffer->mNumberChannels > capture->channels || channels > capture->channels - buffer->mNumberChannels) {
+            atomic_store_explicit(&capture->changed, 1, memory_order_relaxed);
+            return noErr;
+        }
         uint32_t stride = buffer->mNumberChannels * sizeof(float);
         uint32_t n = buffer->mDataByteSize / stride;
         if (buffer->mDataByteSize % stride || (channels && frames != n) || n > AR_MAX_FRAMES) {
@@ -72,20 +89,19 @@ static OSStatus capture_io(AudioObjectID device, const AudioTimeStamp *now, cons
         return noErr;
     }
     ARBlock *block = &capture->blocks[head % AR_QUEUE_BLOCKS];
-    memset(block->pcm, 0, frames * sizeof(float));
-    float scale = 1.f / channels;
+    memset(block->pcm, 0, frames * channels * sizeof(float));
+    uint32_t first_channel = 0;
     for (UInt32 i = 0; i < input->mNumberBuffers; i++) {
         const AudioBuffer *buffer = &input->mBuffers[i];
-        if (!buffer->mData) continue;
         const float *source = buffer->mData;
         for (uint32_t frame = 0; frame < frames; frame++) {
             for (uint32_t channel = 0; channel < buffer->mNumberChannels; channel++) {
-                float sample = source[frame * buffer->mNumberChannels + channel];
-                if (isfinite(sample)) block->pcm[frame] += sample * scale;
+                float sample = source ? source[frame * buffer->mNumberChannels + channel] : 0.f;
+                block->pcm[frame * channels + first_channel + channel] = isfinite(sample) ? fmaxf(-1.f, fminf(1.f, sample)) : 0.f;
             }
         }
+        first_channel += buffer->mNumberChannels;
     }
-    for (uint32_t i = 0; i < frames; i++) block->pcm[i] = fmaxf(-1.f, fminf(1.f, block->pcm[i]));
     block->info = (ARChunk){frames, input_time->mHostTime, input_time->mSampleTime, input_time->mFlags};
     atomic_store_explicit(&capture->head, head + 1, memory_order_release);
     return noErr;
@@ -96,9 +112,9 @@ int ar_capture_read(ARCapture *capture, float *pcm, uint32_t capacity, ARChunk *
     uint64_t head = atomic_load_explicit(&capture->head, memory_order_acquire);
     if (tail == head) return 0;
     ARBlock *block = &capture->blocks[tail % AR_QUEUE_BLOCKS];
-    if (block->info.frames > capacity) return -1;
+    if (block->info.frames > capacity / capture->channels) return -1;
     *chunk = block->info;
-    memcpy(pcm, block->pcm, chunk->frames * sizeof(float));
+    memcpy(pcm, block->pcm, chunk->frames * capture->channels * sizeof(float));
     atomic_store_explicit(&capture->tail, tail + 1, memory_order_release);
     return 1;
 }
@@ -108,6 +124,7 @@ int ar_capture_changed(ARCapture *capture) { return atomic_load_explicit(&captur
 double ar_capture_rate(ARCapture *capture) { return capture->rate; }
 uint32_t ar_capture_microphone(ARCapture *capture) { return capture->microphone; }
 uint32_t ar_capture_aggregate(ARCapture *capture) { return capture->aggregate; }
+uint32_t ar_capture_channels(ARCapture *capture) { return capture->channels; }
 
 static OSStatus property_changed(AudioObjectID object, UInt32 count, const AudioObjectPropertyAddress *addresses, void *user_data) {
     ARCapture *capture = user_data;
@@ -258,7 +275,9 @@ ARCapture *ar_capture_open(uint32_t microphone, char *error, size_t error_size, 
             AudioStreamBasicDescription tap_format;
             UInt32 size = sizeof(tap_format);
             if (status == noErr) status = get_property(capture->tap, kAudioTapPropertyFormat, kAudioObjectPropertyScopeGlobal, &size, &tap_format);
+            if (status == noErr && (!channels || channels == UINT32_MAX || tap_format.mChannelsPerFrame != 1)) status = kAudioHardwareBadDeviceError;
             if (status == noErr) status = configure_streams(capture, channels + tap_format.mChannelsPerFrame, error, error_size);
+            if (status == noErr) status = allocate_blocks(capture);
         }
         if (status == noErr) status = watch_property(capture, capture->microphone, kAudioDevicePropertyDeviceIsAlive, kAudioObjectPropertyScopeGlobal);
         if (status == noErr) status = watch_property(capture, capture->microphone, kAudioDevicePropertyNominalSampleRate, kAudioObjectPropertyScopeGlobal);
@@ -309,6 +328,6 @@ int32_t ar_capture_close(ARCapture *capture) {
     }
     // A failed deregistration can leave HAL callbacks referencing this allocation.
     // Retain it until process exit rather than free memory still owned by the HAL.
-    if (failure == noErr) free(capture);
+    if (failure == noErr) { free(capture->samples); free(capture); }
     return failure;
 }

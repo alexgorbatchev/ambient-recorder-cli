@@ -3,6 +3,7 @@ package storage
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -24,11 +25,11 @@ func TestCurrentFileProcess(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		f, err := s.CreateSegment(time.Now())
+		f, err := createTestSegment(t, s, time.Now())
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := s.MarkCurrent(f); err != nil {
+		if err := s.MarkCurrent([]*os.File{f}); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := fmt.Fprintln(os.Stdout, f.Name()); err != nil {
@@ -60,7 +61,7 @@ func TestCurrentFileProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := CurrentFile(root); err != nil || got != strings.TrimSuffix(line, "\n") {
+	if got, err := CurrentFiles(root); err != nil || (len(got) != 1 || got[0] != strings.TrimSuffix(line, "\n")) {
 		t.Fatalf("live process: %q %v", got, err)
 	}
 	if err := stdin.Close(); err != nil {
@@ -73,7 +74,7 @@ func TestCurrentFileProcess(t *testing.T) {
 	for range 16 {
 		wg.Go(func() {
 			for range 50 {
-				if got, err := CurrentFile(root); !errors.Is(err, ErrNoCurrentFile) || got != "" {
+				if got, err := CurrentFiles(root); !errors.Is(err, ErrNoCurrentFiles) || len(got) != 0 {
 					t.Errorf("exited process: %q %v", got, err)
 				}
 			}
@@ -85,26 +86,26 @@ func TestCurrentFileProcess(t *testing.T) {
 func TestCurrentFileLifecycle(t *testing.T) {
 	root := testdir.New(t)
 	s := openStore(t, root)
-	if _, err := CurrentFile(root); !errors.Is(err, ErrNoCurrentFile) {
+	if _, err := CurrentFiles(root); !errors.Is(err, ErrNoCurrentFiles) {
 		t.Fatalf("empty store: %v", err)
 	}
 	for range 2 {
-		f, err := s.CreateSegment(time.Now())
+		f, err := createTestSegment(t, s, time.Now())
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := s.MarkCurrent(f); err != nil {
+		if err := s.MarkCurrent([]*os.File{f}); err != nil {
 			t.Fatal(err)
 		}
 		for range 2 {
-			got, err := CurrentFile(root)
-			if err != nil || got != f.Name() {
+			got, err := CurrentFiles(root)
+			if err != nil || (len(got) != 1 || got[0] != f.Name()) {
 				t.Fatalf("current=%q err=%v want=%q", got, err, f.Name())
 			}
 		}
 		// A descriptor close models the lock release that also happens on a crash.
 		closeFile(t, f)
-		if _, err := CurrentFile(root); !errors.Is(err, ErrNoCurrentFile) {
+		if _, err := CurrentFiles(root); !errors.Is(err, ErrNoCurrentFiles) {
 			t.Fatalf("stale pointer: %v", err)
 		}
 	}
@@ -120,7 +121,7 @@ func TestCurrentFileLifecycle(t *testing.T) {
 }
 
 func TestCurrentFileInvalidState(t *testing.T) {
-	for _, kind := range []string{"missing root", "root file", "not a link", "missing target", "outside", "directory", "fifo"} {
+	for _, kind := range []string{"missing root", "root file", "invalid JSON", "missing target", "outside", "directory", "fifo"} {
 		t.Run(kind, func(t *testing.T) {
 			root := testdir.New(t)
 			pointer := filepath.Join(root, currentName)
@@ -132,7 +133,7 @@ func TestCurrentFileInvalidState(t *testing.T) {
 				if err := os.WriteFile(root, nil, 0o600); err != nil {
 					t.Fatal(err)
 				}
-			case "not a link":
+			case "invalid JSON":
 				if err := os.WriteFile(pointer, nil, 0o600); err != nil {
 					t.Fatal(err)
 				}
@@ -149,11 +150,15 @@ func TestCurrentFileInvalidState(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				if err := os.Symlink(target, pointer); err != nil {
+				data, err := json.Marshal([]string{target})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(pointer, data, 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if got, err := CurrentFile(root); err == nil || got != "" {
+			if got, err := CurrentFiles(root); err == nil || len(got) != 0 {
 				t.Fatalf("invalid state returned %q: %v", got, err)
 			}
 			if kind == "missing root" {
@@ -170,7 +175,7 @@ func TestMarkCurrentFailures(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			root := testdir.New(t)
 			s := openStore(t, root)
-			f, err := s.CreateSegment(time.Now())
+			f, err := createTestSegment(t, s, time.Now())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -196,7 +201,7 @@ func TestMarkCurrentFailures(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := s.MarkCurrent(f); err == nil {
+			if err := s.MarkCurrent([]*os.File{f}); err == nil {
 				t.Fatal("published invalid state")
 			}
 			if kind != "closed file" {

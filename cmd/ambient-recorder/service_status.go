@@ -36,3 +36,11 @@ func shortenHomePath(path string) string {
 	}
 	return path
 }
+
+func shortenHomePaths(paths string) string {
+	lines := strings.Split(paths, "\n")
+	for i, path := range lines {
+		lines[i] = shortenHomePath(path)
+	}
+	return strings.Join(lines, "\n")
+}

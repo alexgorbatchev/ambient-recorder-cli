@@ -21,8 +21,8 @@
 # Settings are read at process startup. Restart recording to apply file edits.
 # Invalid TOML, incorrect value types, and unknown keys fail before recording.
 #
-# Capture mixes the chosen microphone and computer playback into one mono track.
-# Channels, capture sources, and the fixed 48 kHz encoder input are not settings.
+# Each channel of the chosen microphone and computer playback gets a separate
+# mono 48 kHz file. Channel routing is automatic and has no setting.
 
 [output]
 
@@ -38,11 +38,16 @@
 # CLI override: --output <directory>
 #
 # Files beneath this directory use local calendar time:
-#   YYYY/MM/DD/HH-MM-SS.000000000.opus  (nine fractional-second digits)
+#   YYYY/MM/DD/HH-MM-SS.000000000-mic-1.opus  (first microphone input channel)
+#   YYYY/MM/DD/HH-MM-SS.000000000-mic-2.opus  (when a second channel exists)
+#   YYYY/MM/DD/HH-MM-SS.000000000-playback.opus
 #   YYYY/MM/DD/log.nljson             (newline-delimited JSON diagnostics)
 # Filenames identify segment start time. Segments rotate at hour boundaries;
 # process restarts create new timestamped files without overwriting recordings.
-# Microphone switching keeps the current file and encoder open.
+# Sources share timestamps and rotation boundaries. Microphone switches retain
+# existing source files and encoders. A newly appearing channel is padded with
+# silence from the segment's start; a disappearing channel remains silent until
+# rotation. Source numbers identify device channels, not people.
 # Newly created directories use mode 0700; recordings and logs use mode 0600.
 # Only one recorder can hold the lock for a given output directory.
 # Recordings and logs have no automatic retention limit or deletion policy.
@@ -51,7 +56,7 @@
 # After changing output for an installed service, regenerate and reload its plist.
 # dir = "recordings"
 
-# output.bitrate: integer target Opus bitrate in bits per second.
+# output.bitrate: integer target Opus bitrate per source file in bits per second.
 # Default: 32000 (32 kbit/s). Accepted range: 6000 through 128000, inclusive.
 # Lower values reduce storage at the expense of audio quality; higher values
 # allow more audio detail. This sets a target, not an exact file size: the encoder

@@ -12,9 +12,18 @@ import (
 
 func humanStatusValue(t *testing.T, out, label string) string {
 	t.Helper()
-	for line := range strings.SplitSeq(out, "\n") {
+	lines := strings.Split(out, "\n")
+	for i, line := range lines {
 		if value, ok := strings.CutPrefix(line, label+"  "); ok {
-			return strings.TrimSpace(value)
+			column := len(line) - len(strings.TrimLeft(value, " "))
+			values := []string{strings.TrimSpace(value)}
+			for _, next := range lines[i+1:] {
+				if !strings.HasPrefix(next, strings.Repeat(" ", column)) {
+					break
+				}
+				values = append(values, strings.TrimSpace(next))
+			}
+			return strings.Join(values, "\n")
 		}
 	}
 	t.Fatalf("status row %q missing from %q", label, out)
@@ -37,7 +46,7 @@ func TestHumanServiceStatusTable(t *testing.T) {
 		{"Service file", "~/" + filepath.Base(a.plist)},
 		{"Recording directory", "unavailable"},
 		{"Configuration file", "unavailable"},
-		{"Current recording file", "not running"},
+		{"Current recording files", "not running"},
 		{"Current microphone", "not running"},
 	}
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
@@ -100,7 +109,7 @@ func TestServiceStatusHomePaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	current := filepath.Join(dir, "audio & notes", "current.opus")
-	s, err := serviceinfo.Listen(serviceinfo.Path(a.plist), serviceinfo.Info{Version: "live-version", OutputDir: filepath.Dir(current), ConfigPath: filepath.Join(dir, "config.toml"), CurrentFile: current})
+	s, err := serviceinfo.Listen(serviceinfo.Path(a.plist), serviceinfo.Info{Version: "live-version", OutputDir: filepath.Dir(current), ConfigPath: filepath.Join(dir, "config.toml"), CurrentFiles: []string{current}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +125,7 @@ func TestServiceStatusHomePaths(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if mode == "0" && humanStatusValue(t, out, "Current recording file") != "~/audio & notes/current.opus" || mode == "1" && !strings.Contains(out, current) {
+		if mode == "0" && humanStatusValue(t, out, "Current recording files") != "~/audio & notes/current.opus" || mode == "1" && !strings.Contains(out, current) {
 			t.Fatalf("live recording path: %q", out)
 		}
 	}

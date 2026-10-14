@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -29,6 +30,12 @@ type Store struct {
 	closeErr error
 }
 
+// Segments is one reservation with a common timestamp for all source files.
+type Segments struct {
+	At    time.Time
+	Files []*os.File
+}
+
 // Open creates the output root if necessary and confines file access to it.
 func Open(path string) (*Store, error) {
 	if path == "" {
@@ -44,27 +51,74 @@ func Open(path string) (*Store, error) {
 	return &Store{root: r}, nil
 }
 
-// CreateSegment reserves a nanosecond timestamp path without overwriting existing
-// entries. The timestamp's location determines the calendar directory. If that
-// exact path is occupied, the reservation uses the current clock in that location.
-// The returned empty file must receive Ogg Opus headers and encoded pages before
-// it is playable. Reservation alone does not create a valid recording.
-func (s *Store) CreateSegment(at time.Time) (*os.File, error) {
+// CreateSegment reserves one source at the exact timestamp without overwriting.
+func (s *Store) CreateSegment(at time.Time, source string) (*os.File, error) {
+	if !validSource(source) {
+		return nil, fmt.Errorf("invalid recording source %q", source)
+	}
+	dir, err := s.day(at)
+	if err != nil {
+		return nil, err
+	}
+	path := filepath.Join(dir, at.Format(segmentLayout)+"-"+source+opusSuffix)
+	f, err := s.root.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, fileMode)
+	if err != nil {
+		return nil, fmt.Errorf("reserve recording %s: %w", path, err)
+	}
+	return f, nil
+}
+
+// CreateSegments gives every source the same timestamp. A collision retries the
+// entire reservation at the current clock after removing only its empty files.
+func (s *Store) CreateSegments(at time.Time, sources []string) (*Segments, error) {
+	seen := make(map[string]bool)
+	for _, source := range sources {
+		if !validSource(source) || seen[source] {
+			return nil, fmt.Errorf("invalid or duplicate recording source %q", source)
+		}
+		seen[source] = true
+	}
+	if len(sources) == 0 {
+		return nil, errors.New("recording sources are empty")
+	}
 	for {
-		dir, err := s.day(at)
-		if err != nil {
-			return nil, err
+		var files []*os.File
+		var failure error
+		for _, source := range sources {
+			f, err := s.CreateSegment(at, source)
+			if err != nil {
+				failure = err
+				break
+			}
+			files = append(files, f)
 		}
-		path := filepath.Join(dir, at.Format(segmentLayout)+opusSuffix)
-		f, err := s.root.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, fileMode)
-		if err == nil {
-			return f, nil
+		if failure == nil {
+			return &Segments{At: at, Files: files}, nil
 		}
-		if !errors.Is(err, os.ErrExist) {
-			return nil, fmt.Errorf("reserve recording %s: %w", path, err)
+		var cleanup error
+		for _, f := range files {
+			path, err := filepath.Rel(s.root.Name(), f.Name())
+			cleanup = errors.Join(cleanup, f.Close(), err)
+			if err == nil {
+				cleanup = errors.Join(cleanup, s.root.Remove(path))
+			}
+		}
+		if cleanup != nil || !errors.Is(failure, os.ErrExist) {
+			return nil, errors.Join(failure, cleanup)
 		}
 		at = time.Now().In(at.Location())
 	}
+}
+
+func validSource(source string) bool {
+	if source == "playback" {
+		return true
+	}
+	if len(source) < 5 || source[:4] != "mic-" {
+		return false
+	}
+	n, err := strconv.Atoi(source[4:])
+	return err == nil && n > 0 && strconv.Itoa(n) == source[4:]
 }
 
 // OpenLog opens the timestamp's daily log in append mode, preserving earlier

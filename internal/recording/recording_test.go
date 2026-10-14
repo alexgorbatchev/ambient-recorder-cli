@@ -152,9 +152,9 @@ func TestAcquisitionHourRotation(t *testing.T) {
 		}
 	}()
 	j := &journal{store: s}
-	out := &sink{store: s, journal: j, rate: 48000, bitrate: 32000, complexity: 2}
+	out := &tracks{store: s, journal: j, rate: 48000, bitrate: 32000, complexity: 2}
 	start := time.Date(2026, 9, 30, 23, 59, 59, 990000000, time.UTC)
-	if err := out.write(start, make([]float32, 960)); err != nil {
+	if err := out.write(start, [][]float32{make([]float32, 960), make([]float32, 960)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := out.close(); err != nil {
@@ -163,7 +163,7 @@ func TestAcquisitionHourRotation(t *testing.T) {
 	if err := j.close(); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"2026/09/30/23-59-59.990000000.opus", "2026/10/01/00-00-00.000000000.opus"} {
+	for _, path := range []string{"2026/09/30/23-59-59.990000000-mic-1.opus", "2026/10/01/00-00-00.000000000-mic-1.opus"} {
 		b, err := os.ReadFile(filepath.Join(root, path))
 		if err != nil {
 			t.Fatal(err)

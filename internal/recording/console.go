@@ -18,6 +18,7 @@ var consoleFields = map[string]string{
 	"microphone_name": "microphone", "microphone_transport": "connection",
 	"previous_microphone_name": "previous_microphone", "output_directory": "output",
 	"playback": "playback", "path": "file", "error": "error", "log_error": "log_error",
+	"source":   "source",
 	"retry_in": "retry_in", "dropped_frames": "dropped_frames", "clock_shift": "clock_shift",
 }
 

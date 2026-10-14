@@ -224,7 +224,7 @@ func (a launchAgent) status(ctx context.Context, w io.Writer, details, agent boo
 		return err
 	}
 	if agent {
-		_, err = fmt.Fprintf(w, "installed=%t loaded=%t cli_version=%q service_version=%q plist=%q output_dir=%q config_path=%q current_file=%q paths_source=%q microphone=%q\n", installed, loaded, version, running, a.plist, paths.output, paths.config, paths.current, paths.source, mic)
+		_, err = fmt.Fprintf(w, "installed=%t loaded=%t cli_version=%q service_version=%q plist=%q output_dir=%q config_path=%q current_files=%q paths_source=%q microphone=%q\n", installed, loaded, version, running, a.plist, paths.output, paths.config, paths.current, paths.source, mic)
 	} else {
 		outputLabel, configLabel := "Recording directory", "Configuration file"
 		if paths.source == "saved" {
@@ -239,7 +239,7 @@ func (a launchAgent) status(ctx context.Context, w io.Writer, details, agent boo
 			{"Service file", shortenHomePath(a.plist)},
 			{outputLabel, shortenHomePath(paths.output)},
 			{configLabel, shortenHomePath(paths.config)},
-			{"Current recording file", shortenHomePath(paths.current)},
+			{"Current recording files", shortenHomePaths(paths.current)},
 			{"Current microphone", mic},
 		}
 		err = writeStatusTable(w, rows)

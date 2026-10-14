@@ -165,11 +165,11 @@ func TestPrintFile(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	f, err := s.CreateSegment(time.Now())
+	f, err := s.CreateSegment(time.Now(), "mic-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.MarkCurrent(f); err != nil {
+	if err := s.MarkCurrent([]*os.File{f}); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(testdir.New(t), "settings.toml")
@@ -194,6 +194,45 @@ func TestPrintFile(t *testing.T) {
 	}
 }
 
+func TestPrintSourceFiles(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", testdir.New(t))
+	root := testdir.New(t)
+	s, err := storage.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := s.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	group, err := s.CreateSegments(time.Now(), []string{"mic-1", "mic-2", "playback"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for _, f := range group.Files {
+			if err := f.Close(); err != nil {
+				t.Error(err)
+			}
+		}
+	})
+	if err := s.MarkCurrent(group.Files); err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, f := range group.Files {
+		paths = append(paths, f.Name())
+	}
+	for _, agent := range []string{"0", "1"} {
+		t.Setenv("AGENT", agent)
+		out, diagnostic, err := execute(t, context.Background(), "recording", "print-file", "--output", root)
+		if err != nil || diagnostic != "" || out != strings.Join(paths, "\n")+"\n" {
+			t.Fatalf("source paths: out=%q stderr=%q err=%v", out, diagnostic, err)
+		}
+	}
+}
+
 func TestPathOutputFailures(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", testdir.New(t))
 	root := testdir.New(t)
@@ -206,7 +245,7 @@ func TestPathOutputFailures(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	f, err := s.CreateSegment(time.Now())
+	f, err := s.CreateSegment(time.Now(), "mic-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +254,7 @@ func TestPathOutputFailures(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	if err := s.MarkCurrent(f); err != nil {
+	if err := s.MarkCurrent([]*os.File{f}); err != nil {
 		t.Fatal(err)
 	}
 	r, w, err := os.Pipe()

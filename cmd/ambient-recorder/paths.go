@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/storage"
 	"github.com/spf13/cobra"
@@ -29,18 +30,18 @@ func newPrintDirCommand(configPath *string) *cobra.Command {
 
 func newPrintFileCommand(configPath *string) *cobra.Command {
 	cmd := &cobra.Command{
-		Use: "print-file", Short: "Print the absolute path of the open recording file", Args: cobra.NoArgs,
+		Use: "print-file", Short: "Print absolute paths of open source recordings, one per line", Args: cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, _, err := recordingConfig(cmd, *configPath)
 			if err != nil {
 				return err
 			}
-			path, err := storage.CurrentFile(cfg.Output)
+			paths, err := storage.CurrentFiles(cfg.Output)
 			if err != nil {
 				return fmt.Errorf("inspect recording in %q: %w", cfg.Output, err)
 			}
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), path)
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), strings.Join(paths, "\n"))
 			return err
 		},
 	}

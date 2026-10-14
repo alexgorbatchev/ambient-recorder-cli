@@ -21,6 +21,7 @@ int ar_capture_changed(ARCapture *capture);
 double ar_capture_rate(ARCapture *capture);
 uint32_t ar_capture_microphone(ARCapture *capture);
 uint32_t ar_capture_aggregate(ARCapture *capture);
+uint32_t ar_capture_channels(ARCapture *capture);
 // The caller frees the returned UTF-8 string; NULL means metadata unavailable.
 char *ar_device_string(uint32_t device, uint32_t property);
 const char *ar_device_transport(uint32_t device);

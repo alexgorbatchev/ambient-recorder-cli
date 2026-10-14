@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/serviceinfo"
 )
@@ -18,12 +19,15 @@ func (a launchAgent) recordingPaths(ctx context.Context, installed, loaded bool,
 		p.current = "unavailable"
 	}
 	if live.OutputDir != "" {
-		p.output, p.config, p.current, p.source = live.OutputDir, live.ConfigPath, live.CurrentFile, "live"
+		p.output, p.config, p.source = live.OutputDir, live.ConfigPath, "live"
 		if p.config == "" {
 			p.config = "none (defaults)"
 		}
-		if p.current == "" {
-			p.current = "none"
+		if live.CurrentFiles != nil {
+			p.current = strings.Join(live.CurrentFiles, "\n")
+			if p.current == "" {
+				p.current = "none"
+			}
 		}
 		return p, nil
 	}

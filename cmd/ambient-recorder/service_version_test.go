@@ -69,7 +69,7 @@ func TestLoadedServiceVersion(t *testing.T) {
 		}
 	}
 	liveFile := filepath.Join(testdir.New(t), "unrelated.opus")
-	s, err := serviceinfo.Listen(serviceinfo.Path(a.plist), serviceinfo.Info{Version: "older-than-cli", OutputDir: filepath.Dir(liveFile), CurrentFile: liveFile})
+	s, err := serviceinfo.Listen(serviceinfo.Path(a.plist), serviceinfo.Info{Version: "older-than-cli", OutputDir: filepath.Dir(liveFile), CurrentFiles: []string{liveFile}})
 	if err != nil {
 		t.Fatal(err)
 	}

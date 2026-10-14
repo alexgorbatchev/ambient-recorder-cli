@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -42,24 +43,28 @@ func TestServiceStatusPaths(t *testing.T) {
 		}
 	})
 	for _, current := range []string{"", filepath.Join(live.OutputDir, "first.opus"), filepath.Join(live.OutputDir, "next.opus"), ""} {
-		s.SetCurrentFile(current)
+		files := []string{}
+		if current != "" {
+			files = []string{current, filepath.Join(live.OutputDir, "playback.opus")}
+		}
+		s.SetCurrentFiles(files)
 		for _, mode := range []string{"0", "1"} {
 			t.Setenv("AGENT", mode)
 			out, err := executeService(t, a, filepath.Join(dir, "unrelated missing.toml"), "status")
 			if err != nil {
 				t.Fatal(err)
 			}
-			wantCurrent := current
+			wantCurrent := strings.Join(files, "\n")
 			if wantCurrent == "" {
 				wantCurrent = "none"
 			}
-			for label, value := range map[string]string{"Recording directory": live.OutputDir, "Configuration file": live.ConfigPath, "Current recording file": wantCurrent} {
+			for label, value := range map[string]string{"Recording directory": live.OutputDir, "Configuration file": live.ConfigPath, "Current recording files": wantCurrent} {
 				if mode == "0" {
 					if got := humanStatusValue(t, out, label); got != value {
 						t.Errorf("status row %q = %q, want %q", label, got, value)
 					}
 				} else {
-					key := map[string]string{"Recording directory": "output_dir", "Configuration file": "config_path", "Current recording file": "current_file"}[label]
+					key := map[string]string{"Recording directory": "output_dir", "Configuration file": "config_path", "Current recording files": "current_files"}[label]
 					want := fmt.Sprintf("%s=%q", key, value)
 					if !strings.Contains(out, want) {
 						t.Errorf("missing %q in %q", want, out)
@@ -126,9 +131,13 @@ func TestRecordingServicePaths(t *testing.T) {
 	err = withServiceInfo("live-version", configPath, cfg, func(resolved recording.Config) error {
 		wantOutput := filepath.Join(dir, "audio")
 		for _, current := range []string{"", filepath.Join(wantOutput, "one.opus"), ""} {
-			resolved.CurrentFileChanged(current)
+			files := []string{}
+			if current != "" {
+				files = []string{current}
+			}
+			resolved.CurrentFilesChanged(files)
 			info, err := serviceinfo.Query(context.Background(), path)
-			if err != nil || info.OutputDir != wantOutput || info.ConfigPath != configPath || info.CurrentFile != current || info.Version != "live-version" {
+			if err != nil || info.OutputDir != wantOutput || info.ConfigPath != configPath || !reflect.DeepEqual(info.CurrentFiles, files) || info.Version != "live-version" {
 				t.Fatalf("live snapshot: %+v %v", info, err)
 			}
 		}
@@ -206,7 +215,7 @@ func TestSavedServicePaths(t *testing.T) {
 	if err != nil || p.current != "not running" || p.source != "unavailable" {
 		t.Fatalf("uninstalled paths: %+v %v", p, err)
 	}
-	p, err = a.recordingPaths(context.Background(), false, true, serviceinfo.Info{OutputDir: output})
+	p, err = a.recordingPaths(context.Background(), false, true, serviceinfo.Info{OutputDir: output, CurrentFiles: []string{}})
 	if err != nil || p.config != "none (defaults)" || p.current != "none" {
 		t.Fatalf("implicit defaults: %+v %v", p, err)
 	}

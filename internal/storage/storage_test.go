@@ -20,11 +20,11 @@ func TestSegmentRestart(t *testing.T) {
 	for i := range 3 {
 		s := openStore(t, root)
 		start := at.Add(time.Duration(i) * time.Second)
-		f, err := s.CreateSegment(start)
+		f, err := createTestSegment(t, s, start)
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := filepath.Join(root, "2026/09/30", start.Format("15-04-05.000000000")+".opus")
+		want := filepath.Join(root, "2026/09/30", start.Format("15-04-05.000000000")+"-mic-1.opus")
 		if f.Name() != want {
 			t.Fatalf("path = %q, want %q", f.Name(), want)
 		}
@@ -36,7 +36,7 @@ func TestSegmentRestart(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	b, err := os.ReadFile(filepath.Join(root, "2026/09/30/09-58-00.000000000.opus"))
+	b, err := os.ReadFile(filepath.Join(root, "2026/09/30/09-58-00.000000000-mic-1.opus"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,13 +51,13 @@ func TestSegmentCalendarBoundaries(t *testing.T) {
 		at   time.Time
 		path string
 	}{
-		{time.Date(2026, 9, 30, 23, 59, 0, 123456789, time.UTC), "2026/09/30/23-59-00.123456789.opus"},
-		{time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), "2026/10/01/00-00-00.000000000.opus"},
-		{time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC), "2026/10/01/01-00-00.000000000.opus"},
+		{time.Date(2026, 9, 30, 23, 59, 0, 123456789, time.UTC), "2026/09/30/23-59-00.123456789-mic-1.opus"},
+		{time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), "2026/10/01/00-00-00.000000000-mic-1.opus"},
+		{time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC), "2026/10/01/01-00-00.000000000-mic-1.opus"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
-			f, err := s.CreateSegment(tt.at)
+			f, err := createTestSegment(t, s, tt.at)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -76,8 +76,8 @@ func TestSegmentAllocation(t *testing.T) {
 		collision bool
 	}{
 		{"unrelated", []string{"notes.txt", "log.nljson"}, false},
-		{"reserved file", []string{"09-00-00.000000000.opus"}, true},
-		{"reserved directory", []string{"09-00-00.000000000.opus/"}, true},
+		{"reserved file", []string{"09-00-00.000000000-mic-1.opus"}, true},
+		{"reserved directory", []string{"09-00-00.000000000-mic-1.opus/"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -97,12 +97,12 @@ func TestSegmentAllocation(t *testing.T) {
 				}
 			}
 			s := openStore(t, root)
-			f, err := s.CreateSegment(time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC))
+			f, err := createTestSegment(t, s, time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC))
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer closeFile(t, f)
-			initial := filepath.Join(dir, "09-00-00.000000000.opus")
+			initial := filepath.Join(dir, "09-00-00.000000000-mic-1.opus")
 			if (f.Name() != initial) != tt.collision {
 				t.Fatalf("allocated %q, collision=%v", f.Name(), tt.collision)
 			}
@@ -130,7 +130,7 @@ func TestConcurrentSegments(t *testing.T) {
 	var wg sync.WaitGroup
 	for range workers {
 		wg.Go(func() {
-			f, err := s.CreateSegment(time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC))
+			f, err := createTestSegment(t, s, time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC))
 			if err != nil {
 				errs <- err
 				return
@@ -202,7 +202,7 @@ func TestStorageFailure(t *testing.T) {
 	}
 	s := openStore(t, root)
 	at := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
-	for name, open := range map[string]func(time.Time) (*os.File, error){"segment": s.CreateSegment, "log": s.OpenLog} {
+	for name, open := range map[string]func(time.Time) (*os.File, error){"segment": func(at time.Time) (*os.File, error) { return createTestSegment(t, s, at) }, "log": s.OpenLog} {
 		t.Run(name, func(t *testing.T) {
 			if f, err := open(at); err == nil {
 				closeFile(t, f)
@@ -218,7 +218,7 @@ func TestStorageCannotEscapeRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := openStore(t, root)
-	if f, err := s.CreateSegment(time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)); err == nil {
+	if f, err := createTestSegment(t, s, time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)); err == nil {
 		closeFile(t, f)
 		t.Fatal("created segment outside root")
 	}
@@ -269,4 +269,13 @@ func closeFile(t *testing.T, f *os.File) {
 	if err := f.Close(); err != nil {
 		t.Error(err)
 	}
+}
+
+func createTestSegment(t *testing.T, s *Store, at time.Time) (*os.File, error) {
+	t.Helper()
+	group, err := s.CreateSegments(at, []string{"mic-1"})
+	if err != nil {
+		return nil, err
+	}
+	return group.Files[0], nil
 }

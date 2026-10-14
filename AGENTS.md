@@ -33,8 +33,9 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
 ## CLI and recording contracts
 
 - Keep the path commands named `config print-file`, `recording print-dir` and
-  `recording print-file`. Print only an absolute path plus a newline in both
-  output modes. `config print-file` reports the selected configuration file only
+  `recording print-file`. Config and directory queries print one absolute path
+  plus a newline in both modes; recording print-file lists every open source
+  file as an absolute path on its own line. `config print-file` reports the selected configuration file only
   if it exists, without parsing its contents; a missing file means empty stdout
   and a nonzero exit. `recording print-dir` reports the configured/default
   recording directory. No open recording file means empty stdout and a nonzero
@@ -45,9 +46,13 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
   and pinned dependencies. The byte-match and live-interface tests must pass.
 - Use Cobra and cobra-help-tree. Human help must fit terminal width; agent help
   must start with the skill-reading alert and retain untruncated details.
-- Keep recording mono microphone plus playback, with low encoder CPU effort.
-  Microphone switches retain the active file and encoder. Timestamp filenames
-  use nine fractional-second digits; do not restore indexed naming.
+- Record each microphone input channel into its own mono `mic-N` file and
+  computer playback into a separate mono `playback` file, automatically without
+  a channel setting. Source groups share timestamps and hourly rotation. Keep
+  low encoder effort and retain existing source encoders across microphone
+  switches. Pad newly appearing channels from the current segment's start;
+  retain disappearing channels as silence until rotation. Timestamp filenames
+  use nine fractional-second digits followed by the source suffix.
 - Configuration uses go-toml and `[input]`/`[output]`. Default microphone preference
   is `*`; unlisted inputs remain eligible. Global `!` exclusions and case-sensitive
   `*` name patterns apply before ordering. Log input connection/disconnection.
@@ -59,7 +64,7 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
   the live service process. Never infer the running version from the binary on
   disk; report an unloaded service as not running and missing identity as unavailable.
 - Service status also shows the recording directory, configuration path and
-  current file. Prefer live process values; label saved service paths when live
+  current source files. Prefer live process values; label saved service paths when live
   values are unavailable. Never infer an active service file from another recorder.
 
 ## Verification and boundaries

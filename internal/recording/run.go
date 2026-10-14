@@ -37,9 +37,9 @@ type Config struct {
 	SyncInterval time.Duration
 	Agent        bool
 	Microphones  []string
-	// CurrentFileChanged receives the absolute path on open and empty on close.
+	// CurrentFilesChanged receives absolute source paths on open and empty on close.
 	// Run invokes it synchronously from the recording goroutine.
-	CurrentFileChanged func(string)
+	CurrentFilesChanged func([]string)
 	// MicrophoneChanged receives the active input name, or empty between sessions.
 	MicrophoneChanged func(string)
 }
@@ -56,7 +56,7 @@ type runner struct {
 	lastMicrophoneRefresh  time.Time
 	microphoneFailures     map[string]time.Time
 	aggregateID            uint32
-	out                    *sink
+	out                    *tracks
 }
 
 // Run records until cancellation, retrying capture and storage faults. A native
@@ -104,7 +104,7 @@ func Run(ctx context.Context, cfg Config, stderr io.Writer) (err error) {
 		r.monitor = monitor
 		defer func() { err = errors.Join(err, monitor.Close()) }()
 	}
-	r.out = &sink{store: s, journal: j, rate: resample.Rate, bitrate: cfg.Bitrate, complexity: cfg.Complexity, currentFileChanged: cfg.CurrentFileChanged}
+	r.out = &tracks{store: s, journal: j, rate: resample.Rate, bitrate: cfg.Bitrate, complexity: cfg.Complexity, currentFilesChanged: cfg.CurrentFilesChanged}
 	defer func() { err = errors.Join(err, r.out.close()) }()
 	j.event(slog.LevelInfo, "Recorder started", "pid", os.Getpid(), "bitrate", cfg.Bitrate, "complexity", cfg.Complexity, "sync_interval", cfg.SyncInterval.String(), "microphone_preferences", cfg.Microphones)
 	retry := initialRetry
@@ -141,12 +141,12 @@ func (r *runner) session(ctx context.Context) (err error) {
 	defer r.reportMicrophone("")
 	r.pulse()
 	r.logCapture(c)
-	source, err := r.newSource(c.Rate)
+	source, err := r.newSource(c.Rate, c.Channels-1)
 	if err != nil {
 		r.aggregateID = 0
 		return errors.Join(err, c.Close())
 	}
-	pcm := make([]float32, capture.MaxFrames)
+	pcm := make([]float32, capture.MaxFrames*c.Channels)
 	defer func() {
 		stopErr := c.Stop()
 		if stopErr == nil {
@@ -156,7 +156,7 @@ func (r *runner) session(ctx context.Context) (err error) {
 					err = errors.Join(err, readErr)
 					break
 				}
-				if writeErr := source.write(ctx, chunk.At, pcm[:chunk.Frames]); writeErr != nil {
+				if writeErr := source.write(ctx, chunk.At, pcm[:chunk.Frames*c.Channels]); writeErr != nil {
 					err = errors.Join(err, writeErr)
 					break
 				}
@@ -215,7 +215,7 @@ func (r *runner) consume(ctx context.Context, c *capture.Capture, source *source
 				}
 			}
 			previous = chunk
-			if err := source.write(ctx, chunk.At, pcm[:chunk.Frames]); err != nil {
+			if err := source.write(ctx, chunk.At, pcm[:chunk.Frames*c.Channels]); err != nil {
 				return err
 			}
 			frames += uint64(chunk.Frames)
@@ -252,13 +252,13 @@ func (r *runner) consume(ctx context.Context, c *capture.Capture, source *source
 	return nil
 }
 
-func (r *runner) persist(ctx context.Context, out *sink, at time.Time, pcm []float32) error {
+func (r *runner) persist(ctx context.Context, out *tracks, at time.Time, pcm [][]float32) error {
 	retry := initialRetry
 	for {
 		r.pulse()
 		if err := out.write(at, pcm); err != nil {
 			closeErr := out.close()
-			r.journal.event(slog.LevelWarn, "Audio storage unavailable; replaying pending block into a new segment", "error", errors.Join(err, closeErr), "acquired_at", at, "replayed_frames", len(pcm), "retry_in", retry.String())
+			r.journal.event(slog.LevelWarn, "Audio storage unavailable; replaying pending source block into a new segment group", "error", errors.Join(err, closeErr), "acquired_at", at, "replayed_frames", len(pcm[0]), "retry_in", retry.String())
 			if !r.wait(ctx, retry) {
 				return err
 			}

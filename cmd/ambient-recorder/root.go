@@ -72,7 +72,7 @@ func newStartCommand(configPath *string) *cobra.Command {
 		},
 	}
 	cmd.Flags().String("output", "", "Recording directory (defaults to XDG user data/ambient-recorder)")
-	cmd.Flags().Int("bitrate", config.DefaultBitrate, "Opus bitrate in bits per second (6000..128000)")
+	cmd.Flags().Int("bitrate", config.DefaultBitrate, "Opus bitrate per source file in bits per second (6000..128000)")
 	cmd.Flags().Int("complexity", config.DefaultComplexity, "Opus complexity (0..10; higher uses more CPU)")
 	cmd.Flags().Duration("sync-interval", config.DefaultSyncInterval, "Interval between storage synchronization attempts")
 	return cmd
