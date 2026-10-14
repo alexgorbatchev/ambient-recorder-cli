@@ -15,19 +15,28 @@ import (
 	"github.com/spf13/pflag"
 )
 
-func TestEmbeddedSkill(t *testing.T) {
-	want, err := os.ReadFile("SKILL.md")
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestSkillPrintsFixedPointer(t *testing.T) {
 	for _, mode := range []string{"0", "1", "true", "yes"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Setenv("AGENT", mode)
 			out, diagnostic, err := execute(t, context.Background(), "skill")
-			if err != nil || diagnostic != "" || out != string(want) {
-				t.Fatalf("skill must print source bytes: err=%v stderr=%q stdout=%q", err, diagnostic, out)
+			if err != nil || diagnostic != "" || out != skillPointer {
+				t.Fatalf("skill must print the fixed pointer: err=%v stderr=%q stdout=%q", err, diagnostic, out)
 			}
 		})
+	}
+}
+
+func TestSkillDocExistsAndMatchesName(t *testing.T) {
+	doc, err := os.ReadFile(filepath.Join("..", "..", "skills", "ambient-recorder", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(skillPointer, "skills/ambient-recorder") {
+		t.Fatalf("skill pointer URL must reference skills/ambient-recorder: %q", skillPointer)
+	}
+	if !strings.Contains(string(doc), "\nname: ambient-recorder\n") {
+		t.Fatalf("skills/ambient-recorder/SKILL.md frontmatter name must equal ambient-recorder")
 	}
 }
 
@@ -65,10 +74,6 @@ func TestSkillOutputFailure(t *testing.T) {
 }
 
 func TestSkillWithoutRepository(t *testing.T) {
-	want, err := os.ReadFile("SKILL.md")
-	if err != nil {
-		t.Fatal(err)
-	}
 	root := testdir.New(t)
 	binary := filepath.Join(filepath.Dir(filepath.Dir(root)), "bin", filepath.Base(root), "ambient-recorder")
 	if err := os.MkdirAll(filepath.Dir(binary), 0o700); err != nil {
@@ -102,7 +107,7 @@ func TestSkillWithoutRepository(t *testing.T) {
 		var diagnostic bytes.Buffer
 		cmd.Stderr = &diagnostic
 		out, err := cmd.Output()
-		if err != nil || diagnostic.Len() != 0 || !bytes.Equal(out, want) {
+		if err != nil || diagnostic.Len() != 0 || string(out) != skillPointer {
 			t.Fatalf("offline skill mode=%s: err=%v stderr=%s", mode, err, &diagnostic)
 		}
 	}
@@ -133,10 +138,11 @@ func TestHelpSkillAlert(t *testing.T) {
 }
 
 func TestSkillLiveInterface(t *testing.T) {
-	text, _, err := execute(t, context.Background(), "skill")
+	doc, err := os.ReadFile(filepath.Join("..", "..", "skills", "ambient-recorder", "SKILL.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	text := string(doc)
 	root := liveCommands(t)
 	walkCommands(root, func(c *cobra.Command) {
 		arguments := strings.TrimSpace(strings.TrimPrefix(c.Use, c.Name()))

@@ -1,6 +1,6 @@
 ---
 created_on: 2026-10-05 10:18
-last_modified: 2026-10-05 10:18
+last_modified: 2026-10-14 15:00
 status: current
 ---
 
@@ -38,7 +38,7 @@ and local conventions.
   committed files. Retain original logs in `.tmp` when preparing redacted copies.
 - Read the docs-writer skill before editing documentation. Verify commands against
   the implementation and task runner. CLI interface changes also require updating
-  the [embedded usage reference](../cmd/ambient-recorder/SKILL.md).
+  the [usage reference](../skills/ambient-recorder/SKILL.md).
 - Automatically record new documentation instructions here; ask before resolving
   conflicts with existing repository instructions.
 - Never publish releases, tags, packages or deployments without explicit user

@@ -21,7 +21,7 @@ mkdir -p .tmp dist
 staging=$(mktemp -d "$PWD/.tmp/release-$release_version-$release_arch.XXXXXX")
 mkdir -p "$staging/archive/docs" "$staging/extracted"
 cp bin/ambient-recorder LICENSE THIRD_PARTY_NOTICES.md config.example.toml go.mod go.sum "$staging/archive/"
-cp cmd/ambient-recorder/SKILL.md "$staging/archive/"
+cp skills/ambient-recorder/SKILL.md "$staging/archive/"
 cp -R docs/licenses "$staging/archive/docs/"
 archive="$PWD/dist/ambient-recorder_${release_version}_darwin_${release_arch}.tar.gz"
 COPYFILE_DISABLE=1 tar -czf "$archive" -C "$staging/archive" ambient-recorder LICENSE THIRD_PARTY_NOTICES.md config.example.toml go.mod go.sum SKILL.md docs/licenses
@@ -31,7 +31,7 @@ cmp bin/ambient-recorder "$staging/extracted/ambient-recorder"
 for file in LICENSE THIRD_PARTY_NOTICES.md config.example.toml go.mod go.sum; do
     cmp "$file" "$staging/extracted/$file"
 done
-cmp cmd/ambient-recorder/SKILL.md "$staging/extracted/SKILL.md"
+cmp skills/ambient-recorder/SKILL.md "$staging/extracted/SKILL.md"
 for license in docs/licenses/*.txt; do
     cmp "$license" "$staging/extracted/$license"
 done

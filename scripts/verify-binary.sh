@@ -22,8 +22,18 @@ for mode in 0 1; do
     cmp "$verification/expected-version" "$verification/version-$mode"
     # Run the extracted executable away from source and with module access disabled.
     (cd "$verification"; AGENT=$mode GOPROXY=off "$binary" skill) > "$verification/skill-$mode"
-    cmp cmd/ambient-recorder/SKILL.md "$verification/skill-$mode"
 done
+skill_expected='Install the ambient-recorder skill using the Skills CLI:
+
+  npx skills add alexgorbatchev/ambient-recorder-cli --skill ambient-recorder
+
+Skill:
+
+  https://github.com/alexgorbatchev/ambient-recorder-cli/tree/main/skills/ambient-recorder
+'
+printf '%s' "$skill_expected" > "$verification/skill-expected"
+cmp "$verification/skill-0" "$verification/skill-expected"
+cmp "$verification/skill-1" "$verification/skill-expected"
 AGENT=1 "$binary" recording start --help > "$verification/agent-help"
 IFS= read -r first_line < "$verification/agent-help"
 test "$first_line" = 'ALERT: Agents must read `AGENT=1 ambient-recorder skill` before using this tool.'

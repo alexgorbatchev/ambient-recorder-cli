@@ -1,6 +1,6 @@
 ---
 created_on: 2026-09-30 12:30
-last_modified: 2026-10-14 11:51
+last_modified: 2026-10-14 15:00
 status: current
 ---
 
@@ -55,11 +55,11 @@ GitHub Actions runs the shared native verification workflow on macOS 15 Apple Si
 RECORDER_VERSION=1.0.0 just release
 ```
 
-The recipe runs the normal checks, injects `main.version`, ad-hoc signs the executable and packages `dist/ambient-recorder_1.0.0_darwin_<arch>.tar.gz`. Verification executes both output modes, compares the embedded skill with its maintained source while running away from repository files, validates architecture, the linked macOS 14.2 deployment target and privacy metadata, and rejects non-system dynamic dependencies. The justfile exports deployment flags for every CGO object, including runtime/cgo, and for the final link. Native dependency archives are inspected for the same target; rebuilds preserve old objects and sources under `.tmp`. The extracted archive is checked again. Staging and verification evidence remain in `.tmp`; compiled application binaries remain in `bin/`.
+The recipe runs the normal checks, injects `main.version`, ad-hoc signs the executable and packages `dist/ambient-recorder_1.0.0_darwin_<arch>.tar.gz`. Verification executes both output modes, confirms `skill` prints the fixed install pointer identically in both modes while running away from repository files, validates architecture, the linked macOS 14.2 deployment target and privacy metadata, and rejects non-system dynamic dependencies. The justfile exports deployment flags for every CGO object, including runtime/cgo, and for the final link. Native dependency archives are inspected for the same target; rebuilds preserve old objects and sources under `.tmp`. The extracted archive is checked again. Staging and verification evidence remain in `.tmp`; compiled application binaries remain in `bin/`.
 
 Push an annotated release tag only after CI passes on its target commit and the release-equivalent binary reports the intended version. The tag-triggered workflow repeats native checks for both architectures and publishes only after both pass, with `checksums.txt`. Publishing requires explicit user authorization. These builds are not Developer ID signed or notarized; no signing credentials are configured.
 
-CLI behavior changes require updating `cmd/ambient-recorder/SKILL.md` and its metadata in the same change. Tests compare command/flag documentation with the live Cobra tree and check every help path, including generated commands. Use `AGENT=1 ambient-recorder skill` to inspect the reference embedded in a distributed executable.
+CLI behavior changes require updating `skills/ambient-recorder/SKILL.md` and its metadata in the same change. Tests compare command/flag documentation with the live Cobra tree and check every help path, including generated commands. `ambient-recorder skill` prints a fixed install pointer to that skill, not the reference itself; read `skills/ambient-recorder/SKILL.md` directly for the full operational reference.
 
 ## Live Verification
 

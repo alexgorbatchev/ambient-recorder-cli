@@ -40,10 +40,10 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
   and a nonzero exit. `recording print-dir` reports the configured/default
   recording directory. No open recording file means empty stdout and a nonzero
   exit. Current-file inspection must reject stale state after recorder exit.
-- Maintain the embedded [usage reference](cmd/ambient-recorder/SKILL.md) in the
-  same change as any command, argument, flag, default, environment, output or
+- Maintain the [usage reference](skills/ambient-recorder/SKILL.md) in the same
+  change as any command, argument, flag, default, environment, output or
   side-effect change. Update `last_modified`; verify against the implementation
-  and pinned dependencies. The byte-match and live-interface tests must pass.
+  and pinned dependencies. The fixed-pointer and live-interface tests must pass.
 - Use Cobra and cobra-help-tree. Human help must fit terminal width; agent help
   must start with the skill-reading alert and retain untruncated details.
 - Record each microphone input channel into its own mono `mic-N` file and
