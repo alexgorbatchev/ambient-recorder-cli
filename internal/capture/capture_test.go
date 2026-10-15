@@ -28,12 +28,21 @@ func TestClockRecalibration(t *testing.T) {
 }
 
 func TestNativeQueue(t *testing.T) {
-	binary := filepath.Join(testdir.New(t), "queue-test")
-	cmd := exec.Command("clang", "-fblocks", "-mmacosx-version-min=14.2", "testdata/queue.m", "-framework", "CoreAudio", "-framework", "Foundation", "-framework", "AVFoundation", "-o", binary)
+	testNativeCapture(t, "queue")
+}
+
+func TestNativeCleanup(t *testing.T) {
+	testNativeCapture(t, "cleanup")
+}
+
+func testNativeCapture(t *testing.T, name string) {
+	t.Helper()
+	binary := filepath.Join(testdir.New(t), name+"-test")
+	cmd := exec.Command("clang", "-fblocks", "-mmacosx-version-min=14.2", "testdata/"+name+".m", "-framework", "CoreAudio", "-framework", "Foundation", "-framework", "AVFoundation", "-o", binary)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("compile capture queue test: %v\n%s", err, out)
+		t.Fatalf("compile capture %s test: %v\n%s", name, err, out)
 	}
 	if out, err := exec.Command(binary).CombinedOutput(); err != nil {
-		t.Fatalf("capture queue behavior: %v\n%s", err, out)
+		t.Fatalf("capture %s behavior: %v\n%s", name, err, out)
 	}
 }

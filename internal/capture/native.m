@@ -316,7 +316,9 @@ int32_t ar_capture_close(ARCapture *capture) {
     for (unsigned i = 0; i < capture->watch_count; i++) {
         ARWatch *watch = &capture->watches[i];
         OSStatus status = AudioObjectRemovePropertyListener(watch->object, &watch->address, property_changed, capture);
-        if (status != noErr) failure = status;
+        // Device/stream removal also removes its listeners. There is nothing
+        // left to deregister when the watched AudioObject no longer exists.
+        if (status != noErr && status != kAudioHardwareBadObjectError) failure = status;
     }
     if (capture->aggregate) {
         OSStatus status = AudioHardwareDestroyAggregateDevice(capture->aggregate);

@@ -1,6 +1,6 @@
 ---
 created_on: 2026-09-30 12:30
-last_modified: 2026-10-14 15:00
+last_modified: 2026-10-15 14:00
 status: current
 ---
 
@@ -37,7 +37,7 @@ The track group atomically publishes a `.recording.current` JSON array of relati
 
 Microphone inventory provides stable UIDs and device-reported metadata without opening capture. Preferences match exact names or uid:<UID>, with * trying the default input first and then remaining inputs in stable UID order. Unlisted inputs remain eligible through an implicit final *. Inventory is refreshed on native device/default-input notifications and every five seconds; selection is checked once per second. Connect/disconnect events include identity and metadata, and the recorder's own private aggregate is excluded by its actual device ID. Failed capture inputs receive a 30-second cooldown while other inputs are tried. Capture handover drains and closes native capture/conversion objects while preserving the current output file and encoder. Audio downtime can remain inside that file, so filenames alone are insufficient to identify every gap.
 
-Capture failures retry from 250 ms to five seconds. Storage failures close the whole source group and replay the pending block into a fresh group; this may duplicate already-written samples and is logged. The failed group can have unequal source durations if a write fails partway through the source list. A storage stall beyond the finite capture queue loses incoming frames, which is logged once control returns. A 90-second watchdog covers initialization, normal operation, and deferred cleanup. Its final stderr write is bounded, including when stderr is a full pipe. Failed native deregistration retains callback memory and returns an error requiring process restart, avoiding use-after-free or repeated leaks.
+Capture failures retry from 250 ms to five seconds. Storage failures close the whole source group and replay the pending block into a fresh group; this may duplicate already-written samples and is logged. The failed group can have unequal source durations if a write fails partway through the source list. A storage stall beyond the finite capture queue loses incoming frames, which is logged once control returns. A 90-second watchdog covers initialization, normal operation, and deferred cleanup. Its final stderr write is bounded, including when stderr is a full pipe. Listener removal returning `kAudioHardwareBadObjectError` means the watched device or stream has already disappeared, so cleanup continues normally. Other native cleanup failures retain callback memory and return an error requiring process restart, avoiding use-after-free or repeated leaks. The native cleanup regression creates a private aggregate device, registers a listener, destroys the device and waits for its disappearance before closing capture; it opens no microphone and starts no audio IO.
 
 Daily logs use debug-level JSON. On reopening a log, an incomplete tail is preserved inside a recovery event before valid newline-delimited logging resumes. Failed logging falls back to stderr. Audio and logs synchronize at the configured interval, but parent directories are not explicitly synchronized; this is not a power-loss durability guarantee.
 
