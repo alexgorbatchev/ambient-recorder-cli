@@ -50,3 +50,10 @@ check: lint test build
 release: check
     codesign --force --sign - bin/ambient-recorder
     sh scripts/package-release.sh
+
+# Prepare dependencies and generated assets for local development
+setup:
+    test "$(uname -s)" = Darwin || { echo "ambient-recorder development requires macOS and Xcode command-line tools" >&2; exit 1; }
+    mkdir -p .tmp
+    go mod download
+    just native
