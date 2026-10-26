@@ -6,6 +6,10 @@ on:
       version:
         type: string
         required: true
+      all-architectures:
+        description: Verify both native architectures for release packaging.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,11 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: macos-15
-            arch: arm64
-          - runner: macos-15-intel
-            arch: amd64
+        include: ${{ fromJSON(inputs.all-architectures && '[{"runner":"macos-latest","arch":"arm64"},{"runner":"macos-26-intel","arch":"amd64"}]' || '[{"runner":"macos-latest","arch":"arm64"}]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     env:

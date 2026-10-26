@@ -1,6 +1,6 @@
 ---
 created_on: 2026-09-30 12:30
-last_modified: 2026-10-15 14:00
+last_modified: 2026-10-26 08:01
 status: current
 ---
 
@@ -49,7 +49,7 @@ The optional `output.on_close_command` is an executable/argument array passed fr
 
 ## CI and Release Packaging
 
-GitHub Actions runs the shared native verification workflow on macOS 15 Apple Silicon and Intel, using Xcode 26.2 and Go from go.mod. It installs the approved just 1.58.0 archive with a pinned SHA-256, then runs `just release` with an explicit version. Native libraries are built on each architecture; no cross-compiled binary is treated as a tested native build.
+GitHub Actions runs routine native verification on `macos-latest` Apple Silicon, using Xcode 26.2 and Go from go.mod. Release verification enables the shared workflow's `all-architectures` input to test both Apple Silicon and Intel (`macos-26-intel`). The workflow installs the approved just 1.58.0 archive with a pinned SHA-256, then runs `just release` with an explicit version. Native libraries are built on each selected architecture; no cross-compiled binary is treated as a tested native build. The release publisher runs on Linux and uploads the verified native archives without rebuilding them.
 
 ```sh
 RECORDER_VERSION=1.0.0 just release

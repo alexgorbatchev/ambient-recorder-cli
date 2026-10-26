@@ -12,10 +12,11 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       version: ${{ github.ref_name }}
+      all-architectures: true
 
   publish:
     needs: verify
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
