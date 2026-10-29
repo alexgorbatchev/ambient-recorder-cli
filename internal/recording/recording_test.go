@@ -24,7 +24,11 @@ func TestStartupCaptureLog(t *testing.T) {
 		for _, name := range []string{"USB Microphone – Desk", ""} {
 			var output bytes.Buffer
 			var active string
-			path := filepath.Join(testdir.New(t), "meeting audio")
+			home := testdir.New(t)
+			t.Setenv("HOME", home)
+			path := filepath.Join(home, "meeting audio")
+			// Console output folds HOME; the daily log keeps the absolute path.
+			shown := "~/meeting audio"
 			r := &runner{cfg: Config{Output: path}, journal: testJournal(t, &output, agent)}
 			r.cfg.MicrophoneChanged = func(name string) { active = name }
 			r.logCapture(&capture.Capture{Rate: 16000, Mic: capture.Device{ID: 126, Name: name, Transport: "Bluetooth", Type: "Headset microphone", Manufacturer: "Example Audio", Model: "Desk headset"}})
@@ -39,7 +43,7 @@ func TestStartupCaptureLog(t *testing.T) {
 			if name != "" && !agent {
 				t.Logf("human capture log:\n%s", got)
 			}
-			for _, want := range []string{path, "Bluetooth"} {
+			for _, want := range []string{shown, "Bluetooth"} {
 				if !strings.Contains(got, want) {
 					t.Fatalf("startup output missing %q: %s", want, got)
 				}
@@ -58,11 +62,11 @@ func TestStartupCaptureLog(t *testing.T) {
 				if err := json.Unmarshal([]byte(got), &event); err != nil {
 					t.Fatal(err)
 				}
-				if event["level"] != "INFO" || event["playback"] != "system" || event["output_directory"] != path {
+				if event["level"] != "INFO" || event["playback"] != "system" || event["output_directory"] != shown {
 					t.Fatalf("startup log lost its level or sources: %v", event)
 				}
 			} else {
-				for _, want := range []string{" INF Capture device opened ", "connection=Bluetooth", `playback="all applications"`, `output="` + path + `"`} {
+				for _, want := range []string{" INF Capture device opened ", "connection=Bluetooth", `playback="all applications"`, `output="` + shown + `"`} {
 					if !strings.Contains(got, want) {
 						t.Fatalf("startup output missing readable detail %q: %s", want, got)
 					}
