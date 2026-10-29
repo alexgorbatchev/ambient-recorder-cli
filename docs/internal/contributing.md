@@ -1,6 +1,6 @@
 ---
 created_on: 2026-09-30 12:30
-last_modified: 2026-10-29 12:52
+last_modified: 2026-10-29 15:31
 status: current
 ---
 
@@ -10,7 +10,7 @@ For developers building and validating `ambient-recorder` on macOS. The project 
 
 ## Prerequisites and Build
 
-Use macOS 14.2+, [Go 1.27.1](https://go.dev/dl/), Apple's Command Line Tools (`clang`, SDK, `make`), and the installed [just](https://just.systems/) task runner. Building native dependencies downloads the approved source archives using macOS `curl`, checks their pinned SHA-256 sums, and configures static libraries under `.tmp/native`. The application itself requires only its executable and macOS frameworks.
+Use macOS 14.2+, [Go 1.27.1](https://go.dev/dl/), Apple's Command Line Tools (`clang`, SDK, `make`), and the installed [just](https://just.systems/) task runner. Building native dependencies downloads the source archives pinned in `scripts/native-sources.txt` into `.tmp/downloads` using macOS `curl`, checks their pinned SHA-256 sums, including for archives already present, and configures static libraries under `.tmp/native`. The application itself requires only its executable and macOS frameworks.
 
 ```sh
 just build
@@ -49,7 +49,7 @@ The optional `output.on_close_command` is an executable/argument array passed fr
 
 ## CI and Release Packaging
 
-GitHub Actions runs routine native verification on `macos-latest` Apple Silicon, using Xcode 26.2 and Go from go.mod. Release verification enables the shared workflow's `all-architectures` input to test both Apple Silicon and Intel (`macos-26-intel`). The workflow installs the approved just 1.58.0 archive with a pinned SHA-256, then runs `just release` with an explicit version. Native libraries are built on each selected architecture; no cross-compiled binary is treated as a tested native build. The release publisher runs on Linux and uploads the verified native archives without rebuilding them.
+GitHub Actions runs routine native verification on `macos-latest` Apple Silicon, using Xcode 26.2 and Go from go.mod. Release verification enables the shared workflow's `all-architectures` input to test both Apple Silicon and Intel (`macos-26-intel`). The workflow restores `.tmp/downloads` with `actions/cache`, keyed on `scripts/native-sources.txt`, so routine runs avoid downloading from xiph.org; the native build still verifies every archive's checksum. It installs the approved just 1.58.0 archive with a pinned SHA-256, then runs `just release` with an explicit version. Native libraries are built on each selected architecture; no cross-compiled binary is treated as a tested native build. The release publisher runs on Linux and uploads the verified native archives without rebuilding them.
 
 ```sh
 RECORDER_VERSION=1.0.0 just release

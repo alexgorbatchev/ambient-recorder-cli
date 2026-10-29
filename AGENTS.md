@@ -85,8 +85,9 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
   plists, without audio capture or installation in `~/Library/LaunchAgents`.
   Never use the production service label in lifecycle tests.
 - Ask first before adding any external dependency. Approved CI dependencies are
-  checkout v7, setup-go v7, upload-artifact v7, download-artifact v8, and just
-  1.58.0. No extra runtime dependencies are authorized by release work.
+  checkout v7, setup-go v7, cache v6, upload-artifact v7, download-artifact v8,
+  and just 1.58.0. No extra runtime dependencies are authorized by release
+  work.
 - Never publish releases, tags, packages or deployments without explicit user
   authorization. Authorization applies only to the requested release.
 - Do not edit, stage, reset or commit another agent's changes. Pause and inspect

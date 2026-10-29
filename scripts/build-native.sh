@@ -33,8 +33,11 @@ fetch() {
     tar -xzf ".tmp/downloads/$archive" -C "$build_dir"
 }
 
-fetch opus-1.6.1.tar.gz 6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1
-fetch libopusenc-0.3.tar.gz f616d3aff9b2034547894ccb8ab56c36cf1a4acb0d922c5d7119f97bbe58642c
+# Each line pins one source archive and its SHA-256. CI keys its download cache
+# on this file, and fetch verifies every archive, cached or downloaded.
+while read -r archive checksum <&3; do
+    fetch "$archive" "$checksum"
+done 3< scripts/native-sources.txt
 
 (
     cd "$build_dir/opus-1.6.1"

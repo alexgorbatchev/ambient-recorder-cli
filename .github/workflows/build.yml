@@ -36,6 +36,13 @@ jobs:
           go-version-file: go.mod
       - name: Install approved task runner
         run: sh scripts/install-ci-just.sh
+      # The native build verifies each archive's pinned SHA-256 whether it was
+      # restored here or downloaded, so a cache hit never skips verification.
+      - name: Restore pinned native source archives
+        uses: actions/cache@v6
+        with:
+          path: .tmp/downloads
+          key: native-sources-${{ hashFiles('scripts/native-sources.txt') }}
       - name: Check, build, verify and package
         shell: bash
         run: |
