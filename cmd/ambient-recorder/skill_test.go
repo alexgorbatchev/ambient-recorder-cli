@@ -11,39 +11,101 @@ import (
 	"testing"
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/testdir"
+	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v3"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
-func TestSkillPrintsFixedPointer(t *testing.T) {
+// skillInstructions is the exact text `ambient-recorder skill` must print.
+const skillInstructions = `Install the ambient-recorder skill using the Skills CLI:
+
+  npx skills add alexgorbatchev/ambient-recorder-cli --skill ambient-recorder
+
+Skill:
+
+  https://github.com/alexgorbatchev/ambient-recorder-cli/tree/main/skills/ambient-recorder
+`
+
+const skillAlert = "ALERT: Agents must read `AGENT=1 ambient-recorder skill` before using this tool.\n"
+
+// repositoryRoot is the git repository root relative to this package directory.
+var repositoryRoot = filepath.Join("..", "..")
+
+func readSkill(t *testing.T) string {
+	t.Helper()
+	doc, err := os.ReadFile(filepath.Join(repositoryRoot, "skills", "ambient-recorder", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(doc)
+}
+
+func TestSkillPrintsFixedInstructions(t *testing.T) {
 	for _, mode := range []string{"0", "1", "true", "yes"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Setenv("AGENT", mode)
 			out, diagnostic, err := execute(t, context.Background(), "skill")
-			if err != nil || diagnostic != "" || out != skillPointer {
-				t.Fatalf("skill must print the fixed pointer: err=%v stderr=%q stdout=%q", err, diagnostic, out)
+			if err != nil || diagnostic != "" || out != skillInstructions {
+				t.Fatalf("skill must print the fixed instructions: err=%v stderr=%q stdout=%q", err, diagnostic, out)
 			}
 		})
 	}
 }
 
-func TestSkillDocExistsAndMatchesName(t *testing.T) {
-	doc, err := os.ReadFile(filepath.Join("..", "..", "skills", "ambient-recorder", "SKILL.md"))
+func TestSkillPointerLocatesRepositorySkill(t *testing.T) {
+	out, _, err := execute(t, context.Background(), "skill")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(skillPointer, "skills/ambient-recorder") {
-		t.Fatalf("skill pointer URL must reference skills/ambient-recorder: %q", skillPointer)
+	var skillName, skillDir string
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if _, name, found := strings.Cut(line, " --skill "); found && strings.HasPrefix(line, "npx skills add ") {
+			skillName = name
+		}
+		if rest, found := strings.CutPrefix(line, "https://github.com/"+skillSource.Repository+"/tree/"+skillSource.Branch+"/"); found {
+			skillDir = rest
+		}
 	}
-	if !strings.Contains(string(doc), "\nname: ambient-recorder\n") {
-		t.Fatalf("skills/ambient-recorder/SKILL.md frontmatter name must equal ambient-recorder")
+	if skillName == "" || skillDir == "" {
+		t.Fatalf("skill output lacks the --skill value or repository URL: %q", out)
+	}
+	doc, err := os.ReadFile(filepath.Join(repositoryRoot, filepath.FromSlash(skillDir), "SKILL.md"))
+	if err != nil {
+		t.Fatalf("printed skill path %s has no SKILL.md in the repository: %v", skillDir, err)
+	}
+	if name := frontmatterName(t, string(doc)); name != skillName {
+		t.Fatalf("%s/SKILL.md frontmatter name %q does not match printed --skill %q", skillDir, name, skillName)
 	}
 }
 
+func frontmatterName(t *testing.T, doc string) string {
+	t.Helper()
+	body, found := strings.CutPrefix(doc, "---\n")
+	if !found {
+		t.Fatal("SKILL.md does not open with YAML frontmatter")
+	}
+	frontmatter, _, found := strings.Cut(body, "\n---\n")
+	if !found {
+		t.Fatal("SKILL.md frontmatter is not terminated")
+	}
+	for _, line := range strings.Split(frontmatter, "\n") {
+		if name, found := strings.CutPrefix(line, "name: "); found {
+			return strings.TrimSpace(name)
+		}
+	}
+	t.Fatal("SKILL.md frontmatter has no name")
+	return ""
+}
+
 func TestSkillRejectsArgumentsAndFlags(t *testing.T) {
-	for _, args := range [][]string{{"skill", "extra"}, {"skill", "--unknown"}} {
-		if _, _, err := execute(t, context.Background(), args...); err == nil {
-			t.Fatalf("skill accepted %v", args)
+	for _, mode := range []string{"0", "1"} {
+		t.Setenv("AGENT", mode)
+		for _, args := range [][]string{{"skill", "extra"}, {"skill", "--unknown"}} {
+			out, _, err := execute(t, context.Background(), args...)
+			if err == nil || strings.Contains(out, "npx skills add") {
+				t.Fatalf("AGENT=%s: skill accepted %v: err=%v stdout=%q", mode, args, err, out)
+			}
 		}
 	}
 }
@@ -68,7 +130,7 @@ func TestSkillOutputFailure(t *testing.T) {
 	cmd.SetOut(w)
 	cmd.SetErr(&bytes.Buffer{})
 	cmd.SetArgs([]string{"skill"})
-	if err := cmd.Execute(); !errors.Is(err, os.ErrClosed) {
+	if err := cmd.Execute(); !errors.Is(err, os.ErrClosed) || !strings.Contains(err.Error(), "writing the skill") {
 		t.Fatalf("skill must return its write failure: %v", err)
 	}
 }
@@ -107,7 +169,7 @@ func TestSkillWithoutRepository(t *testing.T) {
 		var diagnostic bytes.Buffer
 		cmd.Stderr = &diagnostic
 		out, err := cmd.Output()
-		if err != nil || diagnostic.Len() != 0 || string(out) != skillPointer {
+		if err != nil || diagnostic.Len() != 0 || string(out) != skillInstructions {
 			t.Fatalf("offline skill mode=%s: err=%v stderr=%s", mode, err, &diagnostic)
 		}
 	}
@@ -124,12 +186,11 @@ func TestHelpSkillAlert(t *testing.T) {
 				if err != nil || diagnostic != "" {
 					t.Fatalf("help %v mode=%q: err=%v stderr=%q", args, mode, err, diagnostic)
 				}
-				alert := "ALERT: Agents must read `AGENT=1 ambient-recorder skill` before using this tool.\n"
 				if mode == "0" {
 					if strings.Contains(out, "ALERT:") {
 						t.Fatalf("human help contains agent alert: %v", args)
 					}
-				} else if !strings.HasPrefix(out, alert) || strings.Count(out, alert) != 1 || !strings.Contains(out, "command: "+c.CommandPath()+"\n") {
+				} else if !strings.HasPrefix(out, skillAlert) || strings.Count(out, skillAlert) != 1 || !strings.Contains(out, "command: "+c.CommandPath()+"\n") {
 					t.Fatalf("agent help %v must begin with one alert and retain framework output: %q", args, out)
 				}
 			}
@@ -137,12 +198,18 @@ func TestHelpSkillAlert(t *testing.T) {
 	}
 }
 
-func TestSkillLiveInterface(t *testing.T) {
-	doc, err := os.ReadFile(filepath.Join("..", "..", "skills", "ambient-recorder", "SKILL.md"))
+func TestSkillOmitsNothing(t *testing.T) {
+	root, err := newRootCommand()
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(doc)
+	if missing := cobrahelptree.SkillOmissions(root, techCatalog, readSkill(t)); len(missing) > 0 {
+		t.Fatalf("SKILL.md omits:\n%s", strings.Join(missing, "\n"))
+	}
+}
+
+func TestSkillLiveInterface(t *testing.T) {
+	text := readSkill(t)
 	root := liveCommands(t)
 	walkCommands(root, func(c *cobra.Command) {
 		arguments := strings.TrimSpace(strings.TrimPrefix(c.Use, c.Name()))

@@ -9,7 +9,7 @@ import (
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/config"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/plist"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/serviceinfo"
-	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
+	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v3"
 	"github.com/spf13/cobra"
 )
 

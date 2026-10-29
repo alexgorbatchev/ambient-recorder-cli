@@ -2,53 +2,50 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"strings"
 
-	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
-	"github.com/mattn/go-runewidth"
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/serviceinfo"
+	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v3"
 	"github.com/spf13/cobra"
 )
 
-const agentHelpAlert = "ALERT: Agents must read `AGENT=1 ambient-recorder skill` before using this tool."
+// fallbackHelpWidth bounds human help when stdout is not a terminal and COLUMNS
+// is unset, so redirected help still fits a standard terminal.
 const fallbackHelpWidth = 80
 
-type helpRenderer func(*cobra.Command, cobrahelptree.TechCatalog, cobrahelptree.TreeOptions) string
+// skillSource is where the agent skill is published:
+// skills/ambient-recorder/SKILL.md on the repository's default branch.
+var skillSource = cobrahelptree.SkillSource{Repository: "alexgorbatchev/ambient-recorder-cli", Branch: "main"}
 
-func configureHelp(root *cobra.Command, catalog cobrahelptree.TechCatalog) error {
+var techCatalog = cobrahelptree.TechCatalog{
+	"ambient-recorder recording start": {
+		Summary: "Record continuously until interrupted",
+		Env: []cobrahelptree.EnvSpec{
+			{Name: "XDG_DATA_HOME", Description: "Absolute directory for user data; defaults to ~/.local/share"},
+			{Name: "XDG_CONFIG_HOME", Description: "Absolute directory for configuration; defaults to ~/.config"},
+			{Name: "AGENT", Description: "Set to 1, true, or yes for compact command output"},
+			{Name: "NO_COLOR", Description: "Any nonempty value disables colors in recording logs"},
+			{Name: "TERM", Description: "Set to dumb to disable colors in recording logs"},
+			{Name: serviceinfo.Environment, Description: "Unix socket for reporting live service version and recording paths; set by service installation"},
+		},
+		Metadata: map[string]string{"output": "mono Ogg Opus", "platform": "macOS 14.2+", "writes": "recordings and diagnostic logs"},
+	},
+	"ambient-recorder help": {
+		Args: []cobrahelptree.ArgSpec{{Name: "[command]", Description: "Command path to describe"}},
+	},
+}
+
+func configureHelp(root *cobra.Command) error {
 	width := cobrahelptree.GetTerminalWidth()
 	if width == 0 {
 		width = fallbackHelpWidth
 	}
-	options := cobrahelptree.HelpOptions{Catalog: catalog, Tree: cobrahelptree.TreeOptions{HideGeneratedCommands: true, TerminalWidth: width}}
+	options := cobrahelptree.HelpOptions{
+		Catalog: techCatalog,
+		Skill:   skillSource,
+		Tree:    cobrahelptree.TreeOptions{HideGeneratedCommands: true, TerminalWidth: width},
+	}
 	if err := cobrahelptree.SetupWithOptions(root, options); err != nil {
 		return fmt.Errorf("configure help: %w", err)
 	}
-	// Use the library's renderers for the full command interface. Bound headers
-	// and generated examples as well as the description columns it already clips.
-	// Generated help/completion commands inherit both hooks.
-	root.SetHelpFunc(func(c *cobra.Command, args []string) {
-		if err := writeHelp(c.OutOrStdout(), c, options, cobrahelptree.RenderTreeHelp); err != nil {
-			c.PrintErrln(err)
-		}
-	})
-	root.SetUsageFunc(func(c *cobra.Command) error {
-		return writeHelp(c.OutOrStderr(), c, options, cobrahelptree.RenderTreeUsage)
-	})
 	return nil
-}
-
-func writeHelp(w io.Writer, c *cobra.Command, options cobrahelptree.HelpOptions, render helpRenderer) error {
-	var screen string
-	if cobrahelptree.IsAgentMode() {
-		screen = agentHelpAlert + "\n" + cobrahelptree.RenderAgentHelp(c, options.Catalog, options.Agent)
-	} else {
-		lines := strings.Split(render(c, options.Catalog, options.Tree), "\n")
-		for i, line := range lines {
-			lines[i] = runewidth.Truncate(line, options.Tree.TerminalWidth, "...")
-		}
-		screen = strings.Join(lines, "\n")
-	}
-	_, err := io.WriteString(w, screen)
-	return err
 }

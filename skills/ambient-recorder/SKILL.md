@@ -4,7 +4,7 @@ description: Use when operating ambient-recorder to record audio, configure micr
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-01 22:02
-  last_modified: 2026-10-14 15:00
+  last_modified: 2026-10-29 12:52
   status: current
 ---
 
@@ -42,7 +42,7 @@ Inspect the listed names and stable `uid:<UID>` selectors, then edit the created
 | `ambient-recorder service restart` | `none` | Refresh the installed executable and live-status endpoint, unload the job and wait for its removal, then enable and load the saved plist. Preserve recording arguments and other saved settings. Read TOML again on process startup. Require installation. |
 | `ambient-recorder service status` | `none` | Print installed and loaded booleans, CLI and live service versions, plist path, recording directory, configuration path, current recording files, active microphone and path source. Optionally include verbatim native diagnostics. Inspect registration, the saved plist and a private local socket without opening capture. |
 | `ambient-recorder service uninstall` | `none` | Disable startup, unload the job if loaded, and remove the saved plist. Retain TOML, recordings and diagnostics; an already absent plist is accepted. |
-| `ambient-recorder skill` | `none` | Print a fixed install pointer (Skills CLI install command and this skill's GitHub URL), byte-for-byte identical in both modes; work offline and without repository files. Return write failures as errors. |
+| `ambient-recorder skill` | `none` | Print the Skills CLI install command and this skill's GitHub URL, byte-for-byte identical in both modes; work offline and without repository files. Reject positional arguments and unknown flags. Return write failures as errors. |
 | `ambient-recorder help` | `[command]` | Print help for a command path, such as `help recording start`. |
 | `ambient-recorder completion` | `none` | Print shell-completion command help. |
 | `ambient-recorder completion bash` | `none` | Print a Bash completion script to stdout. Loading the script requires Bash completion support. |
@@ -50,7 +50,7 @@ Inspect the listed names and stable `uid:<UID>` selectors, then edit the created
 | `ambient-recorder completion powershell` | `none` | Print a PowerShell completion script to stdout. |
 | `ambient-recorder completion zsh` | `none` | Print a Zsh completion script to stdout. |
 
-Use `--help` on any command for help. Domain leaf commands and `skill` accept zero positional arguments. Generated completion commands accept zero positional arguments. Cobra's generated `help` accepts a space-separated command path. Domain command groups show their subtree; `completion` is hidden from human command listings and remains available by name and in agent help. The generated scripts can be redirected to files; generation itself does not install them. Load Zsh completion with `source <(ambient-recorder completion zsh)` after enabling `compinit` in your shell.
+Use `--help` on any command for help. Domain leaf commands and `skill` accept zero positional arguments. Generated completion commands accept zero positional arguments. Cobra's generated `help` accepts a space-separated command path. Domain command groups show their subtree; `completion` and `skill` are hidden from human command listings and remain available by name and in agent help. The generated scripts can be redirected to files; generation itself does not install them. Load Zsh completion with `source <(ambient-recorder completion zsh)` after enabling `compinit` in your shell.
 
 ## Flags
 

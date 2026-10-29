@@ -17,7 +17,9 @@ func TestHumanHelpTreeAndWidth(t *testing.T) {
 	for _, columns := range []string{"", "80", "100"} {
 		t.Setenv("COLUMNS", columns)
 		out, diagnostic, err := execute(t, context.Background(), "--help")
-		if err != nil || diagnostic != "" || !strings.Contains(out, "├─") || !strings.Contains(out, "╰─") || !strings.Contains(out, "skill") || strings.Contains(out, "completion") {
+		// Generated commands (completion and skill) stay runnable but are omitted
+		// from human listings.
+		if err != nil || diagnostic != "" || !strings.Contains(out, "├─") || !strings.Contains(out, "╰─") || strings.Contains(out, "skill") || strings.Contains(out, "completion") {
 			t.Fatalf("root tree: err=%v stderr=%q stdout=%q", err, diagnostic, out)
 		}
 		width := 80
@@ -54,8 +56,9 @@ func TestAgentHelpUsageAndWriteErrors(t *testing.T) {
 	if err := root.Usage(); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(output.String(), "ALERT:") || !strings.Contains(output.String(), "TOML configuration file (defaults to XDG configuration/ambient-recorder/config.toml)") {
-		t.Fatalf("agent usage lost alert or clipped details: %s", &output)
+	if !strings.HasPrefix(output.String(), skillAlert) || !strings.Contains(output.String(), "TOML configuration file (defaults to XDG configuration/ambient-recorder/config.toml)") ||
+		!strings.Contains(output.String(), "\n  - skill: ") || !strings.Contains(output.String(), "\n  - completion: ") {
+		t.Fatalf("agent usage lost alert, generated commands or untruncated details: %s", &output)
 	}
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -78,5 +81,13 @@ func TestAgentHelpUsageAndWriteErrors(t *testing.T) {
 	root.HelpFunc()(root, nil)
 	if !strings.Contains(output.String(), "file already closed") {
 		t.Fatalf("help must report failed alert write: %s", &output)
+	}
+}
+
+func TestConfigureHelpRejectsShadowedSkillCommand(t *testing.T) {
+	root := &cobra.Command{Use: "ambient-recorder"}
+	root.AddCommand(&cobra.Command{Use: "skill", Run: func(*cobra.Command, []string) {}})
+	if err := configureHelp(root); err == nil || !strings.Contains(err.Error(), "configure help") || !strings.Contains(err.Error(), "already has a skill command") {
+		t.Fatalf("configureHelp must refuse a CLI-defined skill command: %v", err)
 	}
 }

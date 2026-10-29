@@ -1,6 +1,6 @@
 ---
 created_on: 2026-09-30 12:30
-last_modified: 2026-10-26 08:01
+last_modified: 2026-10-29 12:52
 status: current
 ---
 
@@ -59,7 +59,7 @@ The recipe runs the normal checks, injects `main.version`, ad-hoc signs the exec
 
 Push an annotated release tag only after CI passes on its target commit and the release-equivalent binary reports the intended version. The tag-triggered workflow repeats native checks for both architectures and publishes only after both pass, with `checksums.txt`. Publishing requires explicit user authorization. These builds are not Developer ID signed or notarized; no signing credentials are configured.
 
-CLI behavior changes require updating `skills/ambient-recorder/SKILL.md` and its metadata in the same change. Tests compare command/flag documentation with the live Cobra tree and check every help path, including generated commands. `ambient-recorder skill` prints a fixed install pointer to that skill, not the reference itself; read `skills/ambient-recorder/SKILL.md` directly for the full operational reference.
+CLI behavior changes require updating `skills/ambient-recorder/SKILL.md` and its metadata in the same change. cobra-help-tree's `HelpOptions.Skill` adds `ambient-recorder skill` and the alert that opens every agent help screen. Tests check the exact `skill` output in both modes, that its printed path holds `SKILL.md` with a matching frontmatter name, and every help path, including generated commands. `cobrahelptree.SkillOmissions` and the flag-table comparison fail tests when the skill drifts from the live Cobra tree. `ambient-recorder skill` prints how to install that skill, not the reference itself; read `skills/ambient-recorder/SKILL.md` directly for the full operational reference.
 
 ## Live Verification
 

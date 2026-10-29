@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
+	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v3"
 )
 
 var version = "dev"

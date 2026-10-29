@@ -7,8 +7,6 @@ import (
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/config"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/recording"
-	"github.com/alexgorbatchev/ambient-recorder-cli/internal/serviceinfo"
-	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -34,23 +32,7 @@ func newRootCommand() (*cobra.Command, error) {
 	}
 	configuration.AddCommand(newConfigInitCommand(&configPath), newConfigPrintFileCommand(&configPath))
 	root.AddCommand(configuration)
-	root.AddCommand(newSkillCommand())
-	catalog := cobrahelptree.TechCatalog{
-		"ambient-recorder recording start": {
-			Summary: "Record continuously until interrupted",
-			Env: []cobrahelptree.EnvSpec{
-				{Name: "XDG_DATA_HOME", Description: "Absolute directory for user data; defaults to ~/.local/share"},
-				{Name: "XDG_CONFIG_HOME", Description: "Absolute directory for configuration; defaults to ~/.config"},
-				{Name: "AGENT", Description: "Set to 1, true, or yes for compact command output"},
-				{Name: "NO_COLOR", Description: "Any nonempty value disables colors in recording logs"},
-				{Name: "TERM", Description: "Set to dumb to disable colors in recording logs"},
-				{Name: serviceinfo.Environment, Description: "Unix socket for reporting live service version and recording paths; set by service installation"},
-			},
-			Metadata: map[string]string{"output": "mono Ogg Opus", "platform": "macOS 14.2+", "writes": "recordings and diagnostic logs"},
-		},
-	}
-	catalog["ambient-recorder help"] = cobrahelptree.TechInfo{Args: []cobrahelptree.ArgSpec{{Name: "[command]", Description: "Command path to describe"}}}
-	if err := configureHelp(root, catalog); err != nil {
+	if err := configureHelp(root); err != nil {
 		return nil, err
 	}
 	return root, nil

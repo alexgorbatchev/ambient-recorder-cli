@@ -6,7 +6,7 @@ The executable includes the following components. Preserve this file and the lin
 | libopus | 1.6.1 | [BSD and patent notices](docs/licenses/opus-1.6.1.txt) |
 | libopusenc | 0.3 | [BSD](docs/licenses/libopusenc-0.3.txt) |
 | Bundled Speex resampler | libopusenc 0.3 | [BSD](docs/licenses/speex-resampler.txt) |
-| cobra-help-tree/v2 | 2.1.0 | [MIT](docs/licenses/cobra-help-tree-2.1.0.txt) |
+| cobra-help-tree/v3 | 3.0.0 | [MIT](docs/licenses/cobra-help-tree-3.0.0.txt) |
 | Cobra | 1.10.2 | [Apache 2.0](docs/licenses/cobra-1.10.2.txt) |
 | go-pretty/v6 | 6.8.3 | [MIT](docs/licenses/go-pretty-6.8.3.txt) |
 | go-toml/v2 | 2.4.3 | [MIT](docs/licenses/go-toml-2.4.3.txt) |

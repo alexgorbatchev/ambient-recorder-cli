@@ -43,9 +43,13 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
 - Maintain the [usage reference](skills/ambient-recorder/SKILL.md) in the same
   change as any command, argument, flag, default, environment, output or
   side-effect change. Update `last_modified`; verify against the implementation
-  and pinned dependencies. The fixed-pointer and live-interface tests must pass.
-- Use Cobra and cobra-help-tree. Human help must fit terminal width; agent help
-  must start with the skill-reading alert and retain untruncated details.
+  and pinned dependencies. The skill output, skill path, `SkillOmissions` and
+  live-interface tests must pass.
+- Use Cobra and cobra-help-tree v3. Provide the `skill` command and agent-help
+  alert only through `HelpOptions.Skill`; keep the skill at
+  `skills/ambient-recorder/SKILL.md` and never embed it in the binary. Human help
+  must fit terminal width; agent help must start with the skill-reading alert
+  and retain untruncated details.
 - Record each microphone input channel into its own mono `mic-N` file and
   computer playback into a separate mono `playback` file, automatically without
   a channel setting. Source groups share timestamps and hourly rotation. Keep
