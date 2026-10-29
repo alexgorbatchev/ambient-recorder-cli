@@ -1,6 +1,6 @@
 ---
 created_on: 2026-09-30 12:30
-last_modified: 2026-10-29 15:31
+last_modified: 2026-10-29 15:35
 status: current
 ---
 
@@ -59,7 +59,7 @@ The recipe runs the normal checks, injects `main.version`, ad-hoc signs the exec
 
 Push an annotated release tag only after CI passes on its target commit and the release-equivalent binary reports the intended version. The tag-triggered workflow repeats native checks for both architectures and publishes only after both pass, with `checksums.txt`. Publishing requires explicit user authorization. These builds are not Developer ID signed or notarized; no signing credentials are configured.
 
-CLI behavior changes require updating `skills/ambient-recorder/SKILL.md` and its metadata in the same change. cobra-help-tree's `HelpOptions.Skill` adds `ambient-recorder skill` and the alert that opens every agent help screen. Tests check the exact `skill` output in both modes, that its printed path holds `SKILL.md` with a matching frontmatter name, and every help path, including generated commands. `cobrahelptree.SkillOmissions` and the flag-table comparison fail tests when the skill drifts from the live Cobra tree. `ambient-recorder skill` prints how to install that skill, not the reference itself; read `skills/ambient-recorder/SKILL.md` directly for the full operational reference.
+CLI behavior changes require updating `skills/ambient-recorder/SKILL.md` and its metadata in the same change. cobra-help-tree's `HelpOptions.Skill` adds `ambient-recorder skill` and the alert that opens every agent help screen. Tests check the exact `skill` output in both modes, that its printed path holds `SKILL.md` with a matching frontmatter name, and every help path, including generated commands. `TestSkillOmitsNothing` runs `cobrahelptree.SkillOmissions`, the single check that the skill mentions every command, flag, argument and catalog environment variable with each flag's type and default. `TestSkillTablesMatchCommandTree` covers what that check leaves out: the command and flag tables must equal the live Cobra tree row for row, with each flag listed under the command that owns it and no stale rows. `ambient-recorder skill` prints how to install that skill, not the reference itself; read `skills/ambient-recorder/SKILL.md` directly for the full operational reference.
 
 ## Live Verification
 

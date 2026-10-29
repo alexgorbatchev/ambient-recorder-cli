@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alexgorbatchev/ambient-recorder-cli/internal/testdir"
 	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v3"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -136,35 +135,10 @@ func TestSkillOutputFailure(t *testing.T) {
 }
 
 func TestSkillWithoutRepository(t *testing.T) {
-	root := testdir.New(t)
-	binary := filepath.Join(filepath.Dir(filepath.Dir(root)), "bin", filepath.Base(root), "ambient-recorder")
-	if err := os.MkdirAll(filepath.Dir(binary), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	build := exec.Command("go", "build", "-work", "-o", binary, ".")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build standalone binary: %v\n%s", err, out)
-	}
-	loadCommands, err := exec.Command("otool", "-l", binary).CombinedOutput()
-	if err != nil {
-		t.Fatalf("inspect linked deployment target: %v\n%s", err, loadCommands)
-	}
-	minimumSeen := false
-	for _, line := range strings.Split(string(loadCommands), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 2 && fields[0] == "minos" {
-			minimumSeen = true
-			if fields[1] != "14.2" {
-				t.Fatalf("linked binary requires macOS %s; documented minimum is 14.2", fields[1])
-			}
-		}
-	}
-	if !minimumSeen {
-		t.Fatalf("linked binary has no minimum macOS load command: %s", loadCommands)
-	}
+	binary, dir := buildStandaloneBinary(t)
 	for _, mode := range []string{"0", "1"} {
 		cmd := exec.Command(binary, "skill")
-		cmd.Dir = root
+		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), "AGENT="+mode, "GOPROXY=off")
 		var diagnostic bytes.Buffer
 		cmd.Stderr = &diagnostic
@@ -208,39 +182,96 @@ func TestSkillOmitsNothing(t *testing.T) {
 	}
 }
 
-func TestSkillLiveInterface(t *testing.T) {
-	text := readSkill(t)
-	root := liveCommands(t)
+// TestSkillTablesMatchCommandTree checks what SkillOmissions leaves to the
+// repository: the command table lists exactly the live commands with their
+// argument syntax, and the flag table lists exactly the live flags under the
+// command that owns each one, with its shorthand, type and parser default. A
+// flag every command accepts with the same metadata is listed once as `all`.
+func TestSkillTablesMatchCommandTree(t *testing.T) {
+	commands, flags := skillTableRows(readSkill(t))
+	wantCommands, wantFlags := liveTableRows(liveCommands(t))
+	compareRows(t, "command table", commands, wantCommands)
+	compareRows(t, "flag table", flags, wantFlags)
+}
+
+// skillTableRows returns the identifying cells of every command-table row
+// (command and arguments) and flag-table row (scope through parser default).
+func skillTableRows(doc string) (commands, flags map[string]bool) {
+	commands, flags = map[string]bool{}, map[string]bool{}
+	for _, line := range strings.Split(doc, "\n") {
+		if !strings.HasPrefix(line, "| `") {
+			continue
+		}
+		cells := strings.Split(strings.TrimPrefix(line, "| "), " | ")
+		if len(cells) >= 5 && strings.HasPrefix(cells[1], "`--") {
+			flags[strings.Join(cells[:5], " | ")] = true
+		} else if len(cells) >= 2 {
+			commands[strings.Join(cells[:2], " | ")] = true
+		}
+	}
+	return commands, flags
+}
+
+func liveTableRows(root *cobra.Command) (commands, flags map[string]bool) {
+	commands = map[string]bool{}
+	owners := map[string][]string{}
+	visited := 0
 	walkCommands(root, func(c *cobra.Command) {
+		visited++
 		arguments := strings.TrimSpace(strings.TrimPrefix(c.Use, c.Name()))
 		if arguments == "" {
 			arguments = "none"
 		}
-		row := "| `" + c.CommandPath() + "` | `" + arguments + "` |"
-		if !strings.Contains(text, row) {
-			t.Errorf("skill missing live command/arguments: %s", row)
-		}
+		commands[tableCell(c.CommandPath())+" | "+tableCell(arguments)] = true
 		c.InitDefaultHelpFlag()
 		c.InitDefaultVersionFlag()
-		c.Flags().AddFlagSet(c.InheritedFlags())
-		c.Flags().VisitAll(func(f *pflag.Flag) {
-			if f.Hidden {
-				return
-			}
-			short := "none"
-			if f.Shorthand != "" {
-				short = "-" + f.Shorthand
-			}
-			value := f.DefValue
-			if value == "" {
-				value = `""`
-			}
-			metadata := " | `--" + f.Name + "` | `" + short + "` | `" + f.Value.Type() + "` | `" + value + "` |"
-			if !strings.Contains(text, "| `"+c.CommandPath()+"`"+metadata) && !strings.Contains(text, "| `all`"+metadata) {
-				t.Errorf("skill missing live flag for %s:%s", c.CommandPath(), metadata)
-			}
-		})
+		for _, set := range []*pflag.FlagSet{c.LocalFlags(), c.InheritedFlags()} {
+			set.VisitAll(func(f *pflag.Flag) {
+				if !f.Hidden {
+					owners[flagMetadata(f)] = append(owners[flagMetadata(f)], c.CommandPath())
+				}
+			})
+		}
 	})
+	flags = map[string]bool{}
+	for metadata, paths := range owners {
+		if len(paths) == visited {
+			flags[tableCell("all")+" | "+metadata] = true
+			continue
+		}
+		for _, path := range paths {
+			flags[tableCell(path)+" | "+metadata] = true
+		}
+	}
+	return commands, flags
+}
+
+func flagMetadata(f *pflag.Flag) string {
+	short := "none"
+	if f.Shorthand != "" {
+		short = "-" + f.Shorthand
+	}
+	value := f.DefValue
+	if value == "" {
+		value = `""`
+	}
+	return strings.Join([]string{tableCell("--" + f.Name), tableCell(short), tableCell(f.Value.Type()), tableCell(value)}, " | ")
+}
+
+func tableCell(text string) string { return "`" + text + "`" }
+
+func compareRows(t *testing.T, table string, got, want map[string]bool) {
+	t.Helper()
+	for row := range want {
+		if !got[row] {
+			t.Errorf("SKILL.md %s lacks live row: | %s |", table, row)
+		}
+	}
+	for row := range got {
+		if !want[row] {
+			t.Errorf("SKILL.md %s has a row the command tree does not match: | %s |", table, row)
+		}
+	}
 }
 
 func liveCommands(t *testing.T) *cobra.Command {
