@@ -89,7 +89,7 @@ func TestLoadedServiceVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := executeService(t, a, "", "status")
-	if err != nil || !strings.Contains(out, "not running") || strings.Contains(out, "older-than-cli") || strings.Contains(out, liveFile) {
+	if err != nil || !strings.Contains(out, "not running") || strings.Contains(out, "older-than-cli") || strings.Contains(out, filepath.Base(liveFile)) {
 		t.Fatalf("unloaded service queried unrelated live endpoint: %q %v", out, err)
 	}
 }

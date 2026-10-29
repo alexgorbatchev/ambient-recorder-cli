@@ -54,11 +54,8 @@ func TestUserServiceResolution(t *testing.T) {
 	for _, mode := range []string{"0", "1"} {
 		t.Setenv("AGENT", mode)
 		out, _, err := execute(t, context.Background(), "service", "status", "--config", filepath.Join(dir, "absent.toml"))
-		wantPath := a.plist
-		if mode == "0" {
-			wantPath = "~/Library/LaunchAgents/" + serviceLabel + ".plist"
-		}
-		if err != nil || !strings.Contains(out, wantPath) {
+		wantPath := "~/Library/LaunchAgents/" + serviceLabel + ".plist"
+		if err != nil || !strings.Contains(out, wantPath) || strings.Contains(out, a.plist) {
 			t.Fatalf("read-only status must work without recording config: %q %v", out, err)
 		}
 		if mode == "0" && humanStatusValue(t, out, "CLI version") != version || mode == "1" && !strings.Contains(out, fmt.Sprintf("cli_version=%q", version)) {
@@ -149,6 +146,7 @@ func executeService(t *testing.T, a launchAgent, path string, args ...string) (s
 }
 
 func TestNativeServiceLifecycle(t *testing.T) {
+	home := useTestHome(t)
 	a := temporaryLaunchAgent(t)
 	t.Setenv("XDG_CONFIG_HOME", testdir.New(t))
 	t.Setenv("XDG_DATA_HOME", testdir.New(t))
@@ -214,12 +212,12 @@ func TestNativeServiceLifecycle(t *testing.T) {
 	for _, mode := range []string{"0", "1"} {
 		t.Setenv("AGENT", mode)
 		out, err := executeService(t, a, "", "status", "--details")
-		if err != nil || !strings.Contains(out, a.target) {
-			t.Fatalf("loaded diagnostics: %q %v", out, err)
+		if err != nil || !strings.Contains(out, a.target) || strings.Contains(out, a.plist) {
+			t.Fatalf("loaded diagnostics must fold home paths: %q %v", out, err)
 		}
 		for _, action := range []string{"start", "restart", "stop", "stop", "restart", "stop", "start"} {
 			out, err := executeService(t, a, "", action)
-			if err != nil || !strings.Contains(out, a.plist) {
+			if err != nil || !strings.Contains(out, underHome(t, home, a.plist)) {
 				t.Fatalf("action %s: %q %v", action, out, err)
 			}
 			_, loaded, err := a.loaded(context.Background())

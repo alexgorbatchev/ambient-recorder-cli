@@ -15,6 +15,7 @@ import (
 )
 
 func TestPrintConfiguredDirectory(t *testing.T) {
+	home := useTestHome(t)
 	t.Setenv("XDG_CONFIG_HOME", testdir.New(t))
 	t.Setenv("XDG_DATA_HOME", testdir.New(t))
 	path := filepath.Join(testdir.New(t), "settings.toml")
@@ -32,7 +33,8 @@ func TestPrintConfiguredDirectory(t *testing.T) {
 			args []string
 			want string
 		}{
-			{"defaults", nil, filepath.Join(os.Getenv("XDG_DATA_HOME"), "ambient-recorder")},
+			{"defaults", nil, underHome(t, home, filepath.Join(os.Getenv("XDG_DATA_HOME"), "ambient-recorder"))},
+			// The working directory lies outside the test home, so it stays absolute.
 			{"explicit config", []string{"--config", path}, relative},
 		} {
 			t.Run(agent+"/"+tt.name, func(t *testing.T) {
@@ -49,6 +51,7 @@ func TestPrintConfiguredDirectory(t *testing.T) {
 }
 
 func TestPrintConfigFile(t *testing.T) {
+	home := useTestHome(t)
 	t.Setenv("XDG_CONFIG_HOME", testdir.New(t))
 	t.Setenv("XDG_DATA_HOME", "relative data path")
 	defaultPath := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "ambient-recorder", "config.toml")
@@ -80,10 +83,10 @@ func TestPrintConfigFile(t *testing.T) {
 			args []string
 			want string
 		}{
-			{"default", nil, defaultPath},
-			{"explicit", []string{"--config", explicit}, explicit},
-			{"relative", []string{"--config", relative}, explicit},
-			{"symlink", []string{"--config", link}, link},
+			{"default", nil, underHome(t, home, defaultPath)},
+			{"explicit", []string{"--config", explicit}, underHome(t, home, explicit)},
+			{"relative", []string{"--config", relative}, underHome(t, home, explicit)},
+			{"symlink", []string{"--config", link}, underHome(t, home, link)},
 		} {
 			t.Run(agent+"/"+tt.name, func(t *testing.T) {
 				out, diagnostic, err := execute(t, context.Background(), append([]string{"config", "print-file"}, tt.args...)...)
@@ -153,6 +156,7 @@ func TestConfigPrintDirRemoved(t *testing.T) {
 }
 
 func TestPrintFile(t *testing.T) {
+	home := useTestHome(t)
 	t.Setenv("XDG_CONFIG_HOME", testdir.New(t))
 	root := testdir.New(t)
 	t.Setenv("XDG_DATA_HOME", filepath.Dir(root))
@@ -180,7 +184,7 @@ func TestPrintFile(t *testing.T) {
 		t.Setenv("AGENT", agent)
 		for _, flags := range [][]string{{"--output", root}, {"--config", path}} {
 			out, diagnostic, err := execute(t, context.Background(), append([]string{"recording", "print-file"}, flags...)...)
-			if err != nil || diagnostic != "" || out != f.Name()+"\n" {
+			if err != nil || diagnostic != "" || out != underHome(t, home, f.Name())+"\n" {
 				t.Fatalf("out=%q stderr=%q err=%v", out, diagnostic, err)
 			}
 		}
@@ -195,6 +199,7 @@ func TestPrintFile(t *testing.T) {
 }
 
 func TestPrintSourceFiles(t *testing.T) {
+	home := useTestHome(t)
 	t.Setenv("XDG_CONFIG_HOME", testdir.New(t))
 	root := testdir.New(t)
 	s, err := storage.Open(root)
@@ -222,7 +227,7 @@ func TestPrintSourceFiles(t *testing.T) {
 	}
 	var paths []string
 	for _, f := range group.Files {
-		paths = append(paths, f.Name())
+		paths = append(paths, underHome(t, home, f.Name()))
 	}
 	for _, agent := range []string{"0", "1"} {
 		t.Setenv("AGENT", agent)

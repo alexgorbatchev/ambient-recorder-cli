@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/homepath"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/serviceinfo"
 	"github.com/jedib0t/go-pretty/v6/table"
 )
@@ -223,8 +224,10 @@ func (a launchAgent) status(ctx context.Context, w io.Writer, details, agent boo
 	if err != nil {
 		return err
 	}
+	plist := homepath.Fold(a.plist)
+	paths.output, paths.config, paths.current = homepath.Fold(paths.output), homepath.Fold(paths.config), homepath.FoldLines(paths.current)
 	if agent {
-		_, err = fmt.Fprintf(w, "installed=%t loaded=%t cli_version=%q service_version=%q plist=%q output_dir=%q config_path=%q current_files=%q paths_source=%q microphone=%q\n", installed, loaded, version, running, a.plist, paths.output, paths.config, paths.current, paths.source, mic)
+		_, err = fmt.Fprintf(w, "installed=%t loaded=%t cli_version=%q service_version=%q plist=%q output_dir=%q config_path=%q current_files=%q paths_source=%q microphone=%q\n", installed, loaded, version, running, plist, paths.output, paths.config, paths.current, paths.source, mic)
 	} else {
 		outputLabel, configLabel := "Recording directory", "Configuration file"
 		if paths.source == "saved" {
@@ -236,10 +239,10 @@ func (a launchAgent) status(ctx context.Context, w io.Writer, details, agent boo
 			{"Loaded by macOS", loaded},
 			{"CLI version", version},
 			{"Running service version", running},
-			{"Service file", shortenHomePath(a.plist)},
-			{outputLabel, shortenHomePath(paths.output)},
-			{configLabel, shortenHomePath(paths.config)},
-			{"Current recording files", shortenHomePaths(paths.current)},
+			{"Service file", plist},
+			{outputLabel, paths.output},
+			{configLabel, paths.config},
+			{"Current recording files", paths.current},
 			{"Current microphone", mic},
 		}
 		err = writeStatusTable(w, rows)
@@ -247,7 +250,8 @@ func (a launchAgent) status(ctx context.Context, w io.Writer, details, agent boo
 	if err != nil || !details || !loaded {
 		return err
 	}
-	// Native diagnostics are displayed verbatim; their text is not an API.
-	_, err = w.Write(out)
+	// Native diagnostics are displayed verbatim apart from home folding; their
+	// text is not an API.
+	_, err = io.WriteString(w, homepath.FoldText(string(out)))
 	return err
 }

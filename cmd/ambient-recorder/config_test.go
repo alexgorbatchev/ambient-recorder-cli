@@ -15,12 +15,17 @@ import (
 )
 
 func TestConfigInitAndDefaultDiscovery(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", testdir.New(t))
+	home := useTestHome(t)
 	t.Setenv("XDG_DATA_HOME", testdir.New(t))
-	path := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "ambient-recorder", "config.toml")
-	out, diagnostic, err := execute(t, context.Background(), "config", "init")
-	if err != nil || diagnostic != "" || !strings.Contains(out, path) {
-		t.Fatalf("init: %q %q %v", out, diagnostic, err)
+	var path string
+	for _, tt := range []struct{ agent, prefix string }{{"1", "config="}, {"0", "Configuration created: "}} {
+		t.Setenv("AGENT", tt.agent)
+		t.Setenv("XDG_CONFIG_HOME", testdir.New(t))
+		path = filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "ambient-recorder", "config.toml")
+		out, diagnostic, err := execute(t, context.Background(), "config", "init")
+		if err != nil || diagnostic != "" || out != tt.prefix+underHome(t, home, path)+"\n" {
+			t.Fatalf("AGENT=%s init: %q %q %v", tt.agent, out, diagnostic, err)
+		}
 	}
 	if _, _, err := execute(t, context.Background(), "config", "init"); err == nil {
 		t.Fatal("config init overwrote an existing file")

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/config"
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/homepath"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/recording"
 	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v3"
 	"github.com/spf13/cobra"
@@ -25,9 +26,9 @@ func newConfigInitCommand(configPath *string) *cobra.Command {
 				return err
 			}
 			if cobrahelptree.IsAgentMode() {
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "config=%s\n", path)
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "config=%s\n", homepath.Fold(path))
 			} else {
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Configuration created: %s\n", path)
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Configuration created: %s\n", homepath.Fold(path))
 			}
 			return err
 		},
@@ -36,7 +37,7 @@ func newConfigInitCommand(configPath *string) *cobra.Command {
 
 func newConfigPrintFileCommand(configPath *string) *cobra.Command {
 	return &cobra.Command{
-		Use: "print-file", Short: "Print the absolute path of the existing configuration file", Args: cobra.NoArgs,
+		Use: "print-file", Short: "Print the path of the existing configuration file", Args: cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := configurationPath(*configPath)
@@ -50,7 +51,7 @@ func newConfigPrintFileCommand(configPath *string) *cobra.Command {
 			if !info.Mode().IsRegular() {
 				return fmt.Errorf("configuration %q is not a regular file", path)
 			}
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), path)
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), homepath.Fold(path))
 			return err
 		},
 	}

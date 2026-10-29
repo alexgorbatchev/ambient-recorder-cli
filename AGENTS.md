@@ -33,13 +33,20 @@ architecture. It does not publish. Compiler outputs belong in `bin/`.
 ## CLI and recording contracts
 
 - Keep the path commands named `config print-file`, `recording print-dir` and
-  `recording print-file`. Config and directory queries print one absolute path
-  plus a newline in both modes; recording print-file lists every open source
-  file as an absolute path on its own line. `config print-file` reports the selected configuration file only
+  `recording print-file`. Config and directory queries print one path plus a
+  newline in both modes; recording print-file lists every open source file on
+  its own line. `config print-file` reports the selected configuration file only
   if it exists, without parsing its contents; a missing file means empty stdout
   and a nonzero exit. `recording print-dir` reports the configured/default
   recording directory. No open recording file means empty stdout and a nonzero
   exit. Current-file inspection must reject stale state after recorder exit.
+- Route every path written to stdout or stderr, in both modes, through
+  `internal/homepath` so the home directory from `os.UserHomeDir` displays as
+  `~`, matching whole segments only. This covers command results, service
+  status, native diagnostics, errors, warnings and console logs. Fold for
+  display only: filesystem calls, subprocess arguments, plist content
+  (`service print` and installed plists), daily diagnostics and command logs
+  keep absolute paths.
 - Maintain the [usage reference](skills/ambient-recorder/SKILL.md) in the same
   change as any command, argument, flag, default, environment, output or
   side-effect change. Update `last_modified`; verify against the implementation

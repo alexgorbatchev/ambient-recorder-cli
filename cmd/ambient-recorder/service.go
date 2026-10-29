@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/config"
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/homepath"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/plist"
 	"github.com/alexgorbatchev/ambient-recorder-cli/internal/serviceinfo"
 	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v3"
@@ -162,7 +163,7 @@ func writeAgent(w io.Writer, settings agentSettings) error {
 
 func writeServiceResult(cmd *cobra.Command, action, path string) error {
 	if cobrahelptree.IsAgentMode() {
-		_, err := fmt.Fprintf(cmd.OutOrStdout(), "service=%s plist=%q\n", action, path)
+		_, err := fmt.Fprintf(cmd.OutOrStdout(), "service=%s plist=%q\n", action, homepath.Fold(path))
 		return err
 	}
 	messages := map[string]string{
@@ -172,6 +173,6 @@ func writeServiceResult(cmd *cobra.Command, action, path string) error {
 		"restart":   "Service restarted. Startup at login enabled; recording launch requested.",
 		"uninstall": "Service uninstalled. Recordings and configuration retained.",
 	}
-	_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\nService file: %s\n", messages[action], path)
+	_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\nService file: %s\n", messages[action], homepath.Fold(path))
 	return err
 }

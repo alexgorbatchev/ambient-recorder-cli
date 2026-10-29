@@ -82,21 +82,25 @@ func TestServiceStatusHomePaths(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if mode == "0" && home == dir {
-				if !strings.Contains(out, "~/audio & notes") || !strings.Contains(out, "~/config.toml") || strings.Contains(out, dir) {
-					t.Fatalf("home-directory paths were not shortened: %q", out)
+			if home == dir {
+				for _, want := range map[string][]string{"0": {"~/audio & notes", "~/config.toml"}, "1": {`output_dir="~/audio & notes"`, `config_path="~/config.toml"`}}[mode] {
+					if !strings.Contains(out, want) || strings.Contains(out, dir) {
+						t.Fatalf("AGENT=%s home-directory paths were not folded to %q: %q", mode, want, out)
+					}
 				}
 			} else if !strings.Contains(out, filepath.Join(dir, "audio & notes")) || !strings.Contains(out, filepath.Join(dir, "config.toml")) {
-				t.Fatalf("status changed paths outside HOME or in machine output: %q", out)
+				t.Fatalf("status changed paths outside HOME: %q", out)
 			}
 		}
 	}
-	// A directory equal to HOME displays the requested trailing slash too.
+	// A directory equal to HOME displays as ~ alone.
 	t.Setenv("HOME", filepath.Join(dir, "audio & notes"))
-	t.Setenv("AGENT", "0")
-	out, err := executeService(t, a, "", "status")
-	if err != nil || !strings.Contains(out, "~/\n") {
-		t.Fatalf("home directory itself was not abbreviated: %q %v", out, err)
+	for _, mode := range []string{"0", "1"} {
+		t.Setenv("AGENT", mode)
+		out, err := executeService(t, a, "", "status")
+		if err != nil || mode == "0" && humanStatusValue(t, out, "Recording directory (saved)") != "~" || mode == "1" && !strings.Contains(out, `output_dir="~"`) {
+			t.Fatalf("AGENT=%s home directory itself was not folded: %q %v", mode, out, err)
+		}
 	}
 	// Live recording paths use the same display policy as saved settings.
 	// Resolve relative to the working directory to fit Darwin's socket limit.
@@ -125,7 +129,7 @@ func TestServiceStatusHomePaths(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if mode == "0" && humanStatusValue(t, out, "Current recording files") != "~/audio & notes/current.opus" || mode == "1" && !strings.Contains(out, current) {
+		if mode == "0" && humanStatusValue(t, out, "Current recording files") != "~/audio & notes/current.opus" || mode == "1" && !strings.Contains(out, `current_files="~/audio & notes/current.opus"`) {
 			t.Fatalf("live recording path: %q", out)
 		}
 	}

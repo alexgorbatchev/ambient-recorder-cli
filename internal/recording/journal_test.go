@@ -57,6 +57,30 @@ func TestJournalConsoleLevels(t *testing.T) {
 	}
 }
 
+func TestConsoleFoldsHomePaths(t *testing.T) {
+	t.Setenv("HOME", "/home/dev")
+	segment := "/home/dev/audio/2026/10/29/12-00-00.000000000-mic-1.opus"
+	failure := errors.New(`open "/home/dev/audio/lock": permission denied`)
+	for _, agent := range []bool{false, true} {
+		var console bytes.Buffer
+		j := testJournal(t, &console, agent)
+		j.event(slog.LevelInfo, "Recording segment closed", "path", segment, "output_directory", "/home/developer/audio", "error", failure)
+		out := console.String()
+		for _, want := range []string{"~/audio/2026/10/29/12-00-00.000000000-mic-1.opus", `~/audio/lock`, "/home/developer/audio"} {
+			if !strings.Contains(out, want) {
+				t.Fatalf("agent=%v console missing %q: %s", agent, want, out)
+			}
+		}
+		if strings.Contains(out, "/home/dev/") {
+			t.Fatalf("agent=%v console printed an unfolded home path: %s", agent, out)
+		}
+		records := journalRecords(t, j)
+		if len(records) != 1 || records[0]["path"] != segment || records[0]["error"] != failure.Error() {
+			t.Fatalf("daily diagnostics must keep absolute paths: %v", records)
+		}
+	}
+}
+
 func TestConsoleDetailSelection(t *testing.T) {
 	for _, agent := range []bool{false, true} {
 		var console bytes.Buffer

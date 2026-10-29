@@ -3,7 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -78,4 +81,48 @@ func execute(t *testing.T, ctx context.Context, args ...string) (string, string,
 	cmd.SetArgs(args)
 	err = cmd.ExecuteContext(ctx)
 	return out.String(), diagnostic.String(), err
+}
+
+// useTestHome points HOME at the directory holding every retained test
+// directory, so paths beneath it print with the home directory folded to ~.
+func useTestHome(t *testing.T) string {
+	t.Helper()
+	home := filepath.Dir(testdir.New(t))
+	t.Setenv("HOME", home)
+	return home
+}
+
+// underHome is the display form of path, which must lie beneath home.
+func underHome(t *testing.T, home, path string) string {
+	t.Helper()
+	rel, err := filepath.Rel(home, path)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+		t.Fatalf("%s is not beneath home %s: %v", path, home, err)
+	}
+	return "~/" + rel
+}
+
+func TestErrorFoldsHomePaths(t *testing.T) {
+	t.Setenv("HOME", "/home/dev")
+	for _, tt := range []struct{ agent, want string }{
+		{"0", "[ERROR] inspect configuration \"~/.config/a.toml\": missing; also /home/developer/b\n"},
+		{"1", "ERR: inspect configuration \"~/.config/a.toml\": missing; also /home/developer/b\n"},
+	} {
+		t.Setenv("AGENT", tt.agent)
+		var out bytes.Buffer
+		err := errors.New("inspect configuration \"/home/dev/.config/a.toml\": missing; also /home/developer/b")
+		if printErr := writeError(&out, err); printErr != nil || out.String() != tt.want {
+			t.Fatalf("AGENT=%s: %q %v, want %q", tt.agent, out.String(), printErr, tt.want)
+		}
+	}
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := errors.Join(w.Close(), r.Close()); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeError(w, errors.New("failure")); !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("lost diagnostic write failure: %v", err)
+	}
 }

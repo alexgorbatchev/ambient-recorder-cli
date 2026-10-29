@@ -13,7 +13,7 @@
 - Use `microphone list` to inspect available inputs, their connection types, and stable device identifiers.
 - Run `config init` to create settings, then edit the microphone preference list if needed. Its default is `["*"]`.
 - Start recording and grant microphone and system audio recording access when macOS requests it.
-- Check the capture log event for the selected microphone, connection type, playback source, and absolute output directory. Use `microphone list` to inspect hardware details.
+- Check the capture log event for the selected microphone, connection type, playback source, and output directory. Use `microphone list` to inspect hardware details.
 - Leave the process running. New files begin at local hour boundaries; existing recordings remain intact.
 - Press Ctrl-C to finish the current source files and stop a foreground recording.
 - Use `service install` to enable background recording at each login after reboot; use `service stop` to stop it and disable startup.
@@ -129,7 +129,7 @@ ambient-recorder --config "$HOME/recorder.toml" config init
 ambient-recorder --config "$HOME/recorder.toml" recording start
 ```
 
-Use `ambient-recorder config print-file` to print the absolute path of the selected configuration file, or the default file when `--config` is omitted. It checks existence without parsing TOML; a missing file leaves stdout empty and exits 1. Use `ambient-recorder recording print-dir` to print the configured/default recording directory, and `ambient-recorder recording print-file` to print the currently open recording file. These commands print only the path and a newline in both output modes.
+Use `ambient-recorder config print-file` to print the path of the selected configuration file, or the default file when `--config` is omitted. It checks existence without parsing TOML; a missing file leaves stdout empty and exits 1. Use `ambient-recorder recording print-dir` to print the configured/default recording directory, and `ambient-recorder recording print-file` to print the currently open recording file. These commands print only the path and a newline in both output modes, with your home directory shown as `~`.
 
 Edit the generated TOML file to set preferences:
 
@@ -179,7 +179,7 @@ ambient-recorder service status --details
 
 The service starts when you log in after reboot. It requests a restart after exit with a five-second throttle, and stops at logout. Recording requires an active login session and cannot continue during sleep or before login. macOS Background Items settings or capture permissions can prevent startup or recording. Check permissions separately for background operation. [Apple documents startup and agent supervision](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html).
 
-Status displays an aligned two-column table without headers or borders. It reports whether a service file exists and whether macOS has loaded the job, the CLI and live service versions, recording paths, all current source files and the microphone currently opened by the recorder. Directory and config labels include `(saved)` when read from saved service settings. Home-directory paths use `~/` in human output; agent output retains absolute paths. A loaded job can still be retrying capture; check the daily `log.nljson` and `supervisor.stderr.log` in the recording directory to confirm audio capture.
+Status displays an aligned two-column table without headers or borders. It reports whether a service file exists and whether macOS has loaded the job, the CLI and live service versions, recording paths, all current source files and the microphone currently opened by the recorder. Directory and config labels include `(saved)` when read from saved service settings. Paths beneath your home directory use `~` in both output modes, as do paths in errors and recording logs. A loaded job can still be retrying capture; check the daily `log.nljson` and `supervisor.stderr.log` in the recording directory to confirm audio capture.
 
 The service includes the absolute TOML path, so microphone preferences and encoding settings are read on each process start. Run `service restart` after editing them or upgrading the CLI. Start and restart refresh the installed executable and live-status endpoint while preserving your recording settings. Restart waits for the old job to finish unloading before loading its replacement. Changing the pinned recording directory or selecting another config file requires uninstalling and reinstalling the service. `--output` on install overrides the directory without editing TOML.
 

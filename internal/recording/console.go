@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/alexgorbatchev/ambient-recorder-cli/internal/homepath"
 	"github.com/lmittmann/tint"
 	"golang.org/x/term"
 )
@@ -24,7 +25,10 @@ var consoleFields = map[string]string{
 
 func newConsoleLogger(w io.Writer, agent bool) *slog.Logger {
 	if agent {
-		options := &slog.HandlerOptions{Level: slog.LevelDebug}
+		options := &slog.HandlerOptions{Level: slog.LevelDebug, ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			a.Value = displayValue(a.Value)
+			return a
+		}}
 		return slog.New(slog.NewJSONHandler(w, options))
 	}
 	options := &tint.Options{
@@ -48,6 +52,7 @@ func consoleAttr(_ []string, a slog.Attr) slog.Attr {
 			a.Value = slog.StringValue("all applications")
 		}
 	}
+	a.Value = displayValue(a.Value)
 	var text string
 	switch a.Value.Kind() {
 	case slog.KindString:
@@ -59,9 +64,6 @@ func consoleAttr(_ []string, a slog.Attr) slog.Attr {
 		if a.Value.Any() == nil {
 			return slog.Attr{}
 		}
-		if err, ok := a.Value.Any().(error); ok {
-			text = err.Error()
-		}
 	}
 	// Tint permits ANSI in colored values and raw newlines in messages. Keep
 	// device names and joined errors within their event without altering JSON.
@@ -69,4 +71,18 @@ func consoleAttr(_ []string, a slog.Attr) slog.Attr {
 		a.Value = slog.StringValue(strconv.Quote(text))
 	}
 	return a
+}
+
+// displayValue folds home paths in console text, including error messages, which
+// are rendered as their text. Daily diagnostics keep absolute paths.
+func displayValue(v slog.Value) slog.Value {
+	switch v.Kind() {
+	case slog.KindString:
+		return slog.StringValue(homepath.FoldText(v.String()))
+	case slog.KindAny:
+		if err, ok := v.Any().(error); ok {
+			return slog.StringValue(homepath.FoldText(err.Error()))
+		}
+	}
+	return v
 }

@@ -3,9 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 )
@@ -19,28 +16,4 @@ func writeStatusTable(w io.Writer, rows []table.Row) error {
 	t.AppendRows(rows)
 	_, err := fmt.Fprintln(w, t.Render())
 	return err
-}
-
-func shortenHomePath(path string) string {
-	home, err := os.UserHomeDir()
-	if err != nil || !filepath.IsAbs(home) || !filepath.IsAbs(path) {
-		return path
-	}
-	home = filepath.Clean(home)
-	if path == home {
-		return "~/"
-	}
-	prefix := strings.TrimSuffix(home, string(filepath.Separator)) + string(filepath.Separator)
-	if strings.HasPrefix(path, prefix) {
-		return "~/" + strings.TrimPrefix(path, prefix)
-	}
-	return path
-}
-
-func shortenHomePaths(paths string) string {
-	lines := strings.Split(paths, "\n")
-	for i, path := range lines {
-		lines[i] = shortenHomePath(path)
-	}
-	return strings.Join(lines, "\n")
 }
